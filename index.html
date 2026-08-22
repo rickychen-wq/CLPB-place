@@ -205,28 +205,6 @@ function winEnd(date){   return new Date(date+'T12:30:00+08:00').getTime(); }
 function pretty(date){ var p=date.split('-'); return Number(p[1])+'/'+Number(p[2]); }
 function stamp(ts){ if(!ts||!ts.toDate) return ''; return twClock(ts.toDate().getTime()); }
 
-/* ===== 距離 ===== */
-function metres(la1,lo1,la2,lo2){
-  var R=6371000,p=Math.PI/180;
-  var dLa=(la2-la1)*p, dLo=(lo2-lo1)*p;
-  var x=Math.sin(dLa/2)*Math.sin(dLa/2)+
-        Math.cos(la1*p)*Math.cos(la2*p)*Math.sin(dLo/2)*Math.sin(dLo/2);
-  return 2*R*Math.asin(Math.sqrt(x));
-}
-function locate(){
-  return new Promise(function(res,rej){
-    if(!navigator.geolocation) return rej({code:0,msg:'這支瀏覽器不支援定位'});
-    navigator.geolocation.getCurrentPosition(
-      function(p){ res(p.coords); },
-      function(e){
-        if(e.code===1) return rej({code:1,msg:'你拒絕了定位權限'});
-        if(e.code===2) return rej({code:2,msg:'抓不到位置訊號'});
-        return rej({code:3,msg:'定位逾時'});
-      },
-      { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
-    );
-  });
-}
 
 function hashPw(s){
   if(window.crypto && crypto.subtle && crypto.subtle.digest){
@@ -412,7 +390,7 @@ function vToday(){
       (next?'<div class="card today"><div class="l">下一場</div>'+
         '<div class="d">'+pretty(next.date)+'</div>'+
         '<div class="v">'+esc(next.venue||'')+'</div></div>'+
-        '<div class="note">當天 <b>00:00 到 12:30</b> 進來表態要不要去。到現場再用通關碼＋定位簽到。</div>'
+        '<div class="note">當天 <b>00:00 到 12:30</b> 進來表態要不要去。到現場再用通關碼簽到。</div>'
        :'<div class="empty">還沒有排定的場次</div>');
     anim(); return;
   }
@@ -460,9 +438,9 @@ function vToday(){
           '<input class="k" id="k3" type="tel" inputmode="numeric" maxlength="1">'+
         '</div>'+
         '<div style="height:16px"></div>'+
-        '<button id="sgo" class="go">簽到（需要定位）</button>'+
-        '<div class="note">按下去會跳出定位請求，<b>一定要按允許</b>。'+
-          '你必須人在活動地點 '+(CFG.radius||500)+' 公尺內才簽得過。</div></div>';
+        '<button id="sgo" class="go">簽到</button>'+
+        '<div class="note">通關碼是幹部<b>現場</b>才會公布的，每一場都不一樣。'+
+          '沒在現場就拿不到。</div></div>';
     }
     if(inWin) h+='<button id="toLeave" class="dim sm">改成請假</button>';
     $('body').innerHTML=h; anim();
@@ -520,8 +498,7 @@ function setIntent(s,intent){
   db.collection('records').doc(id).set({
     sessionId:s.id, uid:ME.id, name:ME.name, cls:ME.cls||'',
     intent:intent, intentAt:SVT(),
-    signed:false, signedAt:null, manual:false,
-    lat:null, lng:null, dist:null
+    signed:false, signedAt:null, manual:false
   },{merge:true}).then(function(){
     LOCK=false; loadAll();
     setTimeout(function(){ toast(intent==='attend'?'已表態：我會去。到現場記得簽到':'已請假'); },350);
@@ -545,40 +522,17 @@ function doSign(s,r){
   if(String(code)!==String(s.code)) return toast('通關碼不對，跟幹部確認一下',true);
 
   LOCK=true;
-  var b=$('sgo'); b.disabled=true; b.innerHTML='<span class="spin"></span>定位中…';
+  var b=$('sgo'); b.disabled=true; b.innerHTML='<span class="spin"></span>送出中…';
 
-  locate().then(function(c){
-    if(s.lat==null||s.lng==null){
-      throw {code:9,msg:'幹部還沒設定這場的地點座標'};
-    }
-    var d=metres(c.latitude,c.longitude,s.lat,s.lng);
-    var R=Number(CFG.radius||500);
-    if(d>R){
-      throw {code:8,msg:'你距離活動地點 '+Math.round(d)+' 公尺，超過 '+R+' 公尺，簽不了'};
-    }
-    b.innerHTML='<span class="spin"></span>送出中…';
-    return db.collection('records').doc(s.id+'__'+ME.id).set({
-      sessionId:s.id, uid:ME.id, name:ME.name, cls:ME.cls||'',
-      intent:'attend', signed:true, signedAt:SVT(), manual:false,
-      lat:c.latitude, lng:c.longitude, dist:Math.round(d), acc:Math.round(c.accuracy||0)
-    },{merge:true});
-  }).then(function(){
+  db.collection('records').doc(s.id+'__'+ME.id).set({
+    sessionId:s.id, uid:ME.id, name:ME.name, cls:ME.cls||'',
+    intent:'attend', signed:true, signedAt:SVT(), manual:false
+  },{merge:true}).then(function(){
     LOCK=false; loadAll();
     setTimeout(function(){ toast('簽到成功 ✓'); },350);
   }).catch(function(e){
-    LOCK=false; b.disabled=false; b.textContent='簽到（需要定位）';
-    if(e && e.code===1){
-      var body=$('body');
-      var tip=document.createElement('div');
-      tip.className='note bad';
-      tip.innerHTML='<b>定位被拒絕，沒辦法簽到。</b><br>'+
-        'iPhone 解法：設定 → Safari → 位置 → 改成「詢問」，'+
-        '然後回來重新整理這頁。<br>Android：網址列左邊的鎖頭 → 權限 → 位置 → 允許。<br>'+
-        '真的弄不好就直接找幹部補簽。';
-      body.appendChild(tip);
-      return toast('你拒絕了定位權限',true);
-    }
-    toast((e&&e.msg)||err(e),true);
+    LOCK=false; b.disabled=false; b.textContent='簽到';
+    toast(err(e),true);
   });
 }
 
