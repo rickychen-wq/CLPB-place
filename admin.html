@@ -200,6 +200,10 @@ var VENUE={ name:'準將撞球運動館' };
 
 /* ===== 狀態 ===== */
 var CFG=null, SES=[], MEM=[], REC=[], TAB='today', PICK=null, EDIT=null, OPENP=null;
+var LV=1, UNLOCK=false;
+function editPin(){ return String((CFG&&CFG.editPin)||'990414'); }
+function can(){ return LV>=2; }
+function syncLv(){ LV = (LS.get('sign_lv2')===editPin()) ? 2 : 1; }
 
 boot();
 
@@ -207,6 +211,7 @@ function boot(){
   Promise.all([syncTime(), db.collection('config').doc('main').get()]).then(function(r){
     if(!r[1].exists) return setup();
     CFG=r[1].data();
+    syncLv();
     if(LS.get('sign_admin')===String(CFG.adminPin)) loadAll();
     else gate();
   }).catch(function(e){
@@ -218,18 +223,23 @@ function setup(){
   app.innerHTML='<div class="hdr"><div class="brand">初始設定<small>FIRST RUN</small></div></div>'+
     '<div id="msg" class="msg"></div><div id="body"><div class="card">'+
       '<label>社團名稱</label><input id="s1" placeholder="例：撞球社">'+
-      '<label>管理密碼</label><input id="s3" type="password" placeholder="至少 4 碼">'+
+      '<label>第一層密碼（給幹部看，只能檢視）</label>'+
+      '<input id="s3" type="password" placeholder="至少 4 碼">'+
+      '<label>第二層密碼（只有你知道，用來編輯）</label>'+
+      '<input id="s4" type="password" placeholder="990414">'+
       '<div style="height:18px"></div><button id="sg">建立系統</button>'+
       '<div class="note">建好之後到「場次」分頁按一鍵建立六場，日期已經幫你填好了。</div>'+
     '</div></div>';
   anim();
   $('sg').onclick=function(){
-    var n=$('s1').value.trim(), p=$('s3').value.trim();
+    var n=$('s1').value.trim(), p=$('s3').value.trim(), e=$('s4').value.trim()||'990414';
     if(!n) return toast('填社團名稱',true);
-    if(p.length<4) return toast('密碼至少 4 碼',true);
+    if(p.length<4) return toast('第一層密碼至少 4 碼',true);
+    if(e.length<4) return toast('第二層密碼至少 4 碼',true);
+    if(e===p) return toast('兩層密碼不能一樣，不然就沒意義了',true);
     var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>建立中…';
     db.collection('config').doc('main').set({
-      clubName:n, adminPin:p, openReg:true, createdAt:Date.now()
+      clubName:n, adminPin:p, editPin:e, openReg:true, createdAt:Date.now()
     }).then(function(){ LS.set('sign_admin',p); boot(); })
       .catch(function(e){ b.disabled=false; b.textContent='建立系統'; toast(e.message,true); });
   };
@@ -244,7 +254,7 @@ function gate(){
   anim();
   $('gg').onclick=function(){
     if($('gp').value.trim()!==String(CFG.adminPin)) return toast('密碼不對',true);
-    LS.set('sign_admin',$('gp').value.trim()); loadAll();
+    LS.set('sign_admin',$('gp').value.trim()); syncLv(); loadAll();
   };
   $('gp').addEventListener('keydown',function(e){ if(e.key==='Enter') $('gg').click(); });
 }
@@ -262,6 +272,7 @@ function loadAll(){
     MEM=[]; r[2].forEach(function(d){ MEM.push(Object.assign({id:d.id},d.data())); });
     REC=[]; r[3].forEach(function(d){ REC.push(Object.assign({id:d.id},d.data())); });
     if(r[4].exists) CFG=r[4].data();
+    syncLv();
     SES.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
     MEM.sort(function(a,b){ return String(a.cls||'').localeCompare(String(b.cls||''))
       || String(a.name||'').localeCompare(String(b.name||''),'zh-Hant'); });
@@ -282,8 +293,9 @@ function render(){
   var tabs=[['today','今日'],['ses','場次'],['mem','名單'],['set','設定']];
   app.innerHTML='<div class="hdr">'+
       '<div class="brand">'+esc(CFG.clubName)+'<small>ADMIN · '+twClock(now())+'</small></div>'+
-      '<div class="who"><a href="#" id="out">登出</a></div></div>'+
-    '<div id="msg" class="msg"></div><div id="body"></div>';
+      '<div class="who"><a href="#" id="lk">'+(can()?'🔓 編輯模式':'🔒 唯讀模式')+'</a>'+
+        '<br><a href="#" id="out">登出</a></div></div>'+
+    '<div id="msg" class="msg"></div><div id="lockbox"></div><div id="body"></div>';
   var old=document.querySelector('.nav'); if(old) old.remove();
   var n=document.createElement('div'); n.className='nav';
   n.innerHTML=tabs.map(function(t){
@@ -291,10 +303,37 @@ function render(){
   document.body.appendChild(n);
   $('out').onclick=function(e){ e.preventDefault(); LS.del('sign_admin');
     var b=document.querySelector('.nav'); if(b) b.remove(); gate(); };
+
+  $('lk').onclick=function(e){
+    e.preventDefault();
+    if(can()){ LS.del('sign_lv2'); LV=1; UNLOCK=false; EDIT=null; OPENP=null;
+      render(); toast('已鎖回唯讀模式'); return; }
+    UNLOCK=!UNLOCK; drawLock();
+  };
+  drawLock();
   Array.prototype.forEach.call(n.children,function(b){
     b.onclick=function(){ TAB=b.dataset.t; EDIT=null; OPENP=null; render(); };
   });
   ({today:vToday, ses:vSes, mem:vMem, set:vSet})[TAB]();
+}
+
+function drawLock(){
+  var box=$('lockbox'); if(!box) return;
+  if(!UNLOCK||can()){ box.innerHTML=''; return; }
+  box.innerHTML='<div class="card edit" style="animation:pop .28s ease both">'+
+    '<div class="sec" style="margin-top:0">解鎖編輯權限</div>'+
+    '<div class="note">唯讀模式下只能看，不能改。輸入第二層密碼才能編輯、新增、刪除。</div>'+
+    '<label>第二層密碼</label><input id="lkp" type="password" placeholder="••••••">'+
+    '<div style="height:14px"></div>'+
+    '<div class="g2"><button id="lkg" class="sm">解鎖</button>'+
+      '<button id="lkc" class="sm dim">取消</button></div></div>';
+  $('lkc').onclick=function(){ UNLOCK=false; drawLock(); };
+  $('lkg').onclick=function(){
+    if($('lkp').value.trim()!==editPin()) return toast('第二層密碼不對',true);
+    LS.set('sign_lv2',editPin()); LV=2; UNLOCK=false; render(); toast('已解鎖，可以編輯了');
+  };
+  $('lkp').addEventListener('keydown',function(e){ if(e.key==='Enter') $('lkg').click(); });
+  try{ $('lkp').focus(); }catch(e){}
 }
 
 function recOf(sid,uid){ return REC.filter(function(r){ return r.sessionId===sid && r.uid===uid; })[0]; }
@@ -326,14 +365,17 @@ function vToday(){
 
   h+='<div class="card"><div class="sw"><div class="t">'+(open?'簽到開放中':'簽到已關閉')+
       '<small>'+(open?'社員現在可以用通關碼簽到':'社員按簽到會被擋下')+'</small></div>'+
-      '<button id="tg" class="xs '+(open?'danger':'go')+'">'+(open?'關閉':'開啟')+'</button></div>'+
-    '<hr><div class="g2">'+
-      '<div><label>通關碼</label><input id="cd" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'"></div>'+
-      '<div><label>&nbsp;</label><button id="rnd" class="ghost sm">隨機換一組</button></div>'+
+      (can()?'<button id="tg" class="xs '+(open?'danger':'go')+'">'+(open?'關閉':'開啟')+'</button>':'')+
     '</div>'+
-    '<div style="height:10px"></div><button id="sv" class="sm">儲存通關碼</button>'+
-    '<div class="note">簽到只驗通關碼，不抓位置。到現場再公布，'+
-      '<b>散場前不要提早講</b>，這就是唯一的防線。</div></div>';
+    (can()
+      ? '<hr><div class="g2">'+
+          '<div><label>通關碼</label><input id="cd" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'"></div>'+
+          '<div><label>&nbsp;</label><button id="rnd" class="ghost sm">隨機換一組</button></div>'+
+        '</div>'+
+        '<div style="height:10px"></div><button id="sv" class="sm">儲存通關碼</button>'+
+        '<div class="note">到現場再公布，<b>散場前不要提早講</b>，這就是唯一的防線。</div>'
+      : '<div class="note">唯讀模式，不能改通關碼或開關簽到。</div>')+
+    '</div>';
 
   h+='<div class="stats">'+
       '<div class="stat s"><div class="n">'+signed.length+'</div><div class="l">已簽到</div></div>'+
@@ -350,14 +392,14 @@ function vToday(){
   $('body').innerHTML=h; anim();
 
   $('pk').onchange=function(){ PICK=this.value; render(); };
-  $('rnd').onclick=function(){ $('cd').value=String(Math.floor(1000+Math.random()*9000)); };
-  $('tg').onclick=function(){
+  if($('rnd')) $('rnd').onclick=function(){ $('cd').value=String(Math.floor(1000+Math.random()*9000)); };
+  if($('tg')) $('tg').onclick=function(){
     var b=this; b.disabled=true;
     db.collection('sessions').doc(s.id).update({open:!open})
       .then(function(){ toast(open?'已關閉簽到':'已開放簽到'); loadAll(); })
       .catch(function(e){ b.disabled=false; toast(e.message,true); });
   };
-  $('sv').onclick=function(){
+  if($('sv')) $('sv').onclick=function(){
     var c=$('cd').value.trim();
     if(!/^\d{4}$/.test(c)) return toast('通關碼要四位數字',true);
     var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
@@ -377,10 +419,10 @@ function grp(title,arr,badge,s){
       if(m.cls) sub.push(esc(m.cls));
       if(r&&r.signed) sub.push((r.manual?'幹部補簽':'簽到')+' '+stamp(r.signedAt));
       else if(r&&r.intentAt) sub.push((r.adminEdit?'幹部設定':'表態')+' '+stamp(r.intentAt));
-      var op=OPENP===m.id;
-      var h='<div class="prow pclick" data-u="'+esc(m.id)+'">'+
+      var op=can()&&OPENP===m.id;
+      var h='<div class="prow'+(can()?' pclick':'')+'" data-u="'+esc(m.id)+'">'+
         '<div class="nm">'+esc(m.name||m.id)+'<small>'+sub.join(' · ')+'</small></div>'+
-        '<span class="badge b-mute">'+(op?'收起 ▲':'處理 ▼')+'</span></div>';
+        (can()?'<span class="badge b-mute">'+(op?'收起 ▲':'處理 ▼')+'</span>':'')+'</div>';
       if(op){
         h+='<div style="padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel2)">'+
           '<div class="g2">'+
@@ -441,11 +483,12 @@ function vSes(){
   var h='';
   if(!SES.length){
     h+='<div class="card"><div class="empty" style="padding:16px">還沒有場次</div>'+
-       '<button id="seed">一鍵建立六場（日期已預填）</button>'+
+       (can()?'<button id="seed">一鍵建立六場（日期已預填）</button>':
+         '<div class="note">要建立場次請先解鎖編輯權限。</div>')+
        '<div class="note">9/22、10/20、11/10、12/8、12/15、2027 1/5，地點預設準將撞球運動館。</div></div>';
   }
   h+=SES.map(sesCard).join('');
-  h+='<div class="sec">新增一場</div><div class="card">'+
+  if(can()) h+='<div class="sec">新增一場</div><div class="card">'+
     '<label>日期</label><input id="nd" type="date">'+
     '<label>名稱</label><input id="nt" placeholder="第 '+(SES.length+1)+' 次社課">'+
     '<div style="height:18px"></div><button id="nadd" class="ghost">新增場次</button></div>';
@@ -469,7 +512,7 @@ function vSes(){
       .catch(function(e){ b.disabled=false; b.textContent='一鍵建立六場'; toast(e.message,true); });
   };
 
-  $('nadd').onclick=function(){
+  if($('nadd')) $('nadd').onclick=function(){
     var d=$('nd').value, t=$('nt').value.trim();
     if(!d) return toast('選日期',true);
     var b=this; b.disabled=true;
@@ -513,8 +556,8 @@ function sesCard(s){
     '<span class="badge '+(s.open!==false?'b-signed':'b-mute')+'">'+
       (s.open!==false?'開放中':'未開放')+'</span></div>'+
     '<div class="meta">已簽到 '+cnt+' / '+MEM.length+'</div>'+
-    '<div style="height:12px"></div>'+
-    '<button class="sedit sm dim" data-id="'+s.id+'">編輯</button></div>';
+    (can()?'<div style="height:12px"></div>'+
+      '<button class="sedit sm dim" data-id="'+s.id+'">編輯</button>':'')+'</div>';
 }
 
 function bindSes(){
@@ -556,7 +599,7 @@ function vMem(){
   h+= MEM.length ? MEM.map(memCard).join('')
     : '<div class="empty">還沒有社員<br>下面貼名單，或直接發網址讓他們自己註冊</div>';
 
-  h+='<div class="sec">批次建立帳號</div><div class="card">'+
+  if(can()) h+='<div class="sec">批次建立帳號</div><div class="card">'+
     '<label>一行一個，格式：學號,姓名,班級</label>'+
     '<textarea id="bulk" placeholder="110234,王小明,101&#10;110235,李小美,102"></textarea>'+
     '<div style="height:14px"></div><button id="bgo" class="ghost">建立</button>'+
@@ -565,7 +608,7 @@ function vMem(){
 
   $('body').innerHTML=h; anim();
 
-  $('bgo').onclick=function(){
+  if($('bgo')) $('bgo').onclick=function(){
     var lines=$('bulk').value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
     if(!lines.length) return toast('貼名單先',true);
     var b=this, batch=db.batch(), n=0, bad=[];
@@ -602,8 +645,8 @@ function memCard(m){
     '<div><div class="item">'+esc(m.name||m.id)+'</div>'+
       '<div class="meta">'+esc(m.cls||'')+' · 學號 '+esc(m.id)+(m.pw?'':' · 未設密碼')+'</div></div>'+
     '<div style="font-size:22px;color:var(--gold)">'+c+'/'+SES.length+'</div></div>'+
-    '<div style="height:12px"></div>'+
-    '<button class="medit sm dim" data-id="'+esc(m.id)+'">編輯</button></div>';
+    (can()?'<div style="height:12px"></div>'+
+      '<button class="medit sm dim" data-id="'+esc(m.id)+'">編輯</button>':'')+'</div>';
 }
 
 function bindMem(){
@@ -645,32 +688,42 @@ function bindMem(){
 function vSet(){
   var open=CFG.openReg!==false;
   $('body').innerHTML=
-    '<div class="sec">新帳號註冊</div><div class="card">'+
-      '<div class="sw"><div class="t">'+(open?'開放中':'已關閉')+
-        '<small>'+(open?'輸入沒用過的 ID 就能自己建帳號':'只有現有帳號能登入')+'</small></div>'+
-        '<button id="rsw" class="xs '+(open?'danger':'ghost')+'">'+(open?'關閉':'開啟')+'</button></div>'+
-      '<div class="note">大家都註冊完就關掉，免得有人亂建帳號灌出席。</div></div>'+
-    '<div class="sec">系統設定</div><div class="card">'+
-      '<label>社團名稱</label><input id="cn" value="'+esc(CFG.clubName||'')+'">'+
-      '<label>管理密碼</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
-      '<div style="height:16px"></div><button id="cg">儲存</button></div>'+
+    (can()
+      ? '<div class="sec">新帳號註冊</div><div class="card">'+
+          '<div class="sw"><div class="t">'+(open?'開放中':'已關閉')+
+            '<small>'+(open?'輸入沒用過的學號就能自己建帳號':'只有現有帳號能登入')+'</small></div>'+
+            '<button id="rsw" class="xs '+(open?'danger':'ghost')+'">'+(open?'關閉':'開啟')+'</button></div>'+
+          '<div class="note">大家都註冊完就關掉，免得有人亂建帳號灌出席。</div></div>'+
+        '<div class="sec">系統設定</div><div class="card">'+
+          '<label>社團名稱</label><input id="cn" value="'+esc(CFG.clubName||'')+'">'+
+          '<label>第一層密碼（給幹部，只能看）</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
+          '<label>第二層密碼（編輯用，只有你知道）</label><input id="ce" value="'+esc(editPin())+'">'+
+          '<div style="height:16px"></div><button id="cg">儲存</button>'+
+          '<div class="note">改了第二層密碼會自動幫你重新解鎖，不用再輸入一次。</div></div>'
+      : '<div class="sec">目前權限</div><div class="card">'+
+          '<div class="row"><div class="item">唯讀模式</div>'+
+            '<span class="badge b-mute">第一層</span></div>'+
+          '<div class="note">可以看所有場次、名單、出席狀況，也能匯出 Excel，'+
+            '但不能新增、編輯、刪除或補簽。要編輯請點右上角的 🔒 解鎖。</div></div>')+
     '<div class="sec">匯出</div><div class="card">'+
       '<button id="xls" class="ghost">下載 Excel（出席總表 + 明細）</button></div>';
   anim();
 
-  $('rsw').onclick=function(){
+  if($('rsw')) $('rsw').onclick=function(){
     var b=this; b.disabled=true;
     db.collection('config').doc('main').update({openReg:!open})
       .then(function(){ CFG.openReg=!open; toast(open?'已關閉註冊':'已開放註冊'); render(); })
       .catch(function(e){ b.disabled=false; toast(e.message,true); });
   };
-  $('cg').onclick=function(){
-    var n=$('cn').value.trim(), p=$('cp').value.trim();
+  if($('cg')) $('cg').onclick=function(){
+    var n=$('cn').value.trim(), p=$('cp').value.trim(), e2=$('ce').value.trim();
     if(!n) return toast('社團名稱不能空白',true);
-    if(p.length<4) return toast('密碼至少 4 碼',true);
+    if(p.length<4) return toast('第一層密碼至少 4 碼',true);
+    if(e2.length<4) return toast('第二層密碼至少 4 碼',true);
+    if(e2===p) return toast('兩層密碼不能一樣，不然就沒意義了',true);
     var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
-    db.collection('config').doc('main').update({clubName:n, adminPin:p})
-      .then(function(){ LS.set('sign_admin',p); toast('已儲存'); boot(); })
+    db.collection('config').doc('main').update({clubName:n, adminPin:p, editPin:e2})
+      .then(function(){ LS.set('sign_admin',p); LS.set('sign_lv2',e2); toast('已儲存'); boot(); })
       .catch(function(e){ b.disabled=false; b.textContent='儲存'; toast(e.message,true); });
   };
   $('xls').onclick=function(){
