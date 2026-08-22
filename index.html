@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#07070a">
+<title>社課簽到</title>
+<style>
+:root{
+  --bg:#07070a; --panel:#101016; --panel2:#181820; --line:#2a2a35;
+  --gold:#e8b44c; --gold2:#f5d189; --golddim:#8a6926; --txt:#ececf2; --dim:#8b8b98;
+  --ok:#4ce8a0; --bad:#f0706b; --blue:#6cd0f0; --r:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);
+  font-family:ui-monospace,'SF Mono',Menlo,Consolas,'PingFang TC','Noto Sans TC',monospace;
+  font-size:16px;line-height:1.7;min-height:100vh;
+  padding-bottom:calc(86px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px)}
+body::after{content:'';position:fixed;inset:0;z-index:9997;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 40%,transparent 55%,rgba(0,0,0,.5) 100%)}
+.wrap{max-width:600px;margin:0 auto;padding:0 16px}
+
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes glow{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+@keyframes drop{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(76,232,160,.5)}70%{box-shadow:0 0 0 16px rgba(76,232,160,0)}100%{box-shadow:0 0 0 0 rgba(76,232,160,0)}}
+.anim{animation:rise .42s cubic-bezier(.22,.9,.28,1) both}
+
+.hdr{border-bottom:1px solid var(--line);padding:18px 0 14px;margin-bottom:16px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand{font-size:20px;letter-spacing:.13em;color:var(--gold);text-shadow:0 0 18px rgba(232,180,76,.45)}
+.brand small{display:block;font-size:11px;letter-spacing:.32em;color:var(--dim);text-shadow:none;margin-top:4px}
+.who{font-size:13px;color:var(--dim);text-align:right;line-height:1.5}
+.who b{color:var(--gold);display:block;font-size:16px}
+.who a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--line)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+label{display:block;font-size:11px;letter-spacing:.22em;color:var(--dim);margin:16px 0 7px}
+label:first-child{margin-top:0}
+input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  border-radius:10px;padding:14px;font:inherit;font-size:17px;outline:none;
+  transition:border-color .18s,box-shadow .18s}
+input:focus,select:focus{border-color:var(--golddim);box-shadow:0 0 0 3px rgba(232,180,76,.13)}
+input[type=date]{font-size:15px;padding:14px 10px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g2>*{min-width:0}
+button{width:100%;background:linear-gradient(180deg,var(--gold2),var(--gold));color:#0a0a0d;
+  border:0;border-radius:11px;padding:16px;font:inherit;font-size:17px;font-weight:700;
+  letter-spacing:.06em;cursor:pointer;min-height:52px;
+  transition:transform .12s,box-shadow .2s,opacity .2s;box-shadow:0 3px 16px rgba(232,180,76,.16)}
+button:active{transform:scale(.975)}
+button:disabled{opacity:.35;box-shadow:none}
+button.ghost{background:transparent;color:var(--gold);border:1px solid var(--golddim);box-shadow:none}
+button.dim{background:transparent;color:var(--dim);border:1px solid var(--line);box-shadow:none}
+button.go{background:linear-gradient(180deg,#6ef0b4,var(--ok));color:#062117;box-shadow:0 3px 16px rgba(76,232,160,.2)}
+button.sm{padding:12px;font-size:15px;min-height:46px}
+
+.sec{font-size:11px;letter-spacing:.3em;color:var(--dim);margin:26px 0 12px;
+  border-bottom:1px solid var(--line);padding-bottom:9px}
+.sec:first-child{margin-top:0}
+
+/* 8 號球 */
+.hero{display:flex;justify-content:center;padding:4px 0 16px}
+.hero svg{width:124px;height:124px;animation:float 4.5s ease-in-out infinite;
+  filter:drop-shadow(0 12px 22px rgba(0,0,0,.6))}
+
+/* 今日場次 */
+.today{position:relative;overflow:hidden;text-align:center;padding:26px 16px;
+  background:var(--panel);border:1px solid var(--golddim)}
+.today::before{content:'';position:absolute;left:50%;top:-60%;width:150%;height:170%;
+  transform:translateX(-50%);pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,rgba(232,180,76,.15),transparent 62%);
+  animation:glow 5s ease-in-out infinite}
+.today .l{position:relative;font-size:11px;letter-spacing:.34em;color:var(--dim)}
+.today .d{position:relative;font-size:34px;color:var(--gold);line-height:1.2;margin:6px 0 2px;
+  font-variant-numeric:tabular-nums}
+.today .v{position:relative;font-size:14px;color:var(--dim)}
+.today.done{border-color:#2f7355}
+.today.done .d{color:var(--ok)}
+
+.state{text-align:center;padding:20px 16px;border-radius:12px;margin-bottom:14px;animation:pop .3s ease both}
+.state .big{font-size:26px;line-height:1.3}
+.state .s{font-size:14px;color:var(--dim);margin-top:6px}
+.state.attend{background:rgba(232,180,76,.1);border:1px solid var(--golddim);color:var(--gold)}
+.state.leave{background:rgba(139,139,152,.1);border:1px solid var(--line);color:var(--dim)}
+.state.signed{background:rgba(76,232,160,.1);border:1px solid #2f7355;color:var(--ok);animation:ring 1.6s ease-out 1}
+
+.badge{display:inline-block;font-size:12px;letter-spacing:.08em;padding:4px 11px;border-radius:20px;border:1px solid;white-space:nowrap}
+.b-signed{color:var(--ok);border-color:#2f7355;background:rgba(76,232,160,.1)}
+.b-attend{color:var(--gold);border-color:var(--golddim);background:rgba(232,180,76,.1)}
+.b-leave{color:var(--dim);border-color:var(--line)}
+.b-miss{color:var(--bad);border-color:#75342f;background:rgba(240,112,107,.1)}
+.b-none{color:var(--dim);border-color:var(--line);opacity:.6}
+
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.row>div:first-child{flex:1;min-width:0}
+.item{font-size:17px;word-break:break-word}
+.meta{font-size:13px;color:var(--dim);margin-top:5px;line-height:1.55}
+.note{font-size:14px;background:var(--panel2);border-left:3px solid var(--golddim);
+  padding:11px 13px;border-radius:0 8px 8px 0;margin-top:12px;color:#cfcfd8;line-height:1.65}
+.note.bad{border-color:var(--bad)}
+.note b{color:var(--gold)}
+.empty{text-align:center;color:var(--dim);padding:44px 16px;font-size:14px;line-height:2.1}
+
+.msg{font-size:14px;padding:13px 15px;border-radius:10px;margin-bottom:14px;display:none}
+.msg.on{display:block;animation:drop .3s cubic-bezier(.22,.9,.28,1) both}
+.msg.ok{background:rgba(76,232,160,.12);color:var(--ok);border:1px solid #2f7355}
+.msg.err{background:rgba(240,112,107,.12);color:var(--bad);border:1px solid #75342f}
+
+.pin{display:flex;gap:10px;justify-content:center;margin:6px 0 4px}
+.pin input{width:60px;height:70px;text-align:center;font-size:30px;padding:0;
+  font-variant-numeric:tabular-nums;border-radius:12px}
+
+.spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(10,10,13,.25);
+  border-top-color:#0a0a0d;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px}
+
+.load{text-align:center;color:var(--golddim);padding:70px 0;letter-spacing:.35em;font-size:13px;
+  animation:glow 1.4s ease-in-out infinite}
+hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:9000;display:flex;
+  background:rgba(10,10,14,.93);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+.nav button{flex:1;background:transparent;border:0;box-shadow:none;color:var(--dim);
+  font-size:14px;font-weight:400;padding:12px 4px;min-height:auto;border-radius:10px}
+.nav button.on{color:var(--gold);background:rgba(232,180,76,.1)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="load">LOADING…</div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+'use strict';
+
+var firebaseConfig = {
+  apiKey: "AIzaSyDaX_IqdAg0iRYIfDQv8jlBZu4z8jKFdkI",
+  authDomain: "clpb-place.firebaseapp.com",
+  projectId: "clpb-place",
+  storageBucket: "clpb-place.firebasestorage.app",
+  messagingSenderId: "466178805376",
+  appId: "1:466178805376:web:04516e8e7a26c0547e6065"
+};
+firebase.initializeApp(firebaseConfig);
+var db=firebase.firestore();
+var SVT=firebase.firestore.FieldValue.serverTimestamp;
+
+var app=document.getElementById('app');
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+var LS={ get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},
+         set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}},
+         del:function(k){try{localStorage.removeItem(k)}catch(e){}} };
+function reduced(){ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } }
+
+function toast(t,bad){ var m=$('msg'); if(!m) return;
+  m.className='msg'; void m.offsetWidth;
+  m.className='msg on '+(bad?'err':'ok'); m.textContent=t;
+  clearTimeout(toast._t); toast._t=setTimeout(function(){ m.className='msg'; },6000);
+  try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){} }
+
+function anim(){ var b=$('body'); if(!b||reduced()) return;
+  Array.prototype.forEach.call(b.children,function(el,i){
+    if(i>13) return; el.classList.add('anim'); el.style.animationDelay=(i*45)+'ms'; }); }
+
+/* ===== 伺服器校時 ===== */
+var SKEW=0;
+function syncTime(){
+  var ref=db.collection('ping').doc('t');
+  return ref.set({ t:SVT() })
+    .then(function(){ return ref.get({source:'server'}); })
+    .then(function(s){
+      var t=s.data()&&s.data().t;
+      if(t && t.toDate) SKEW=t.toDate().getTime()-Date.now();
+    })
+    .catch(function(){ SKEW=0; });
+}
+function now(){ return Date.now()+SKEW; }
+
+/* ===== 台灣時間工具 ===== */
+function twDate(ms){                    // → 'YYYY-MM-DD'（台灣）
+  var d=new Date(ms+8*3600000);
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+
+         String(d.getUTCDate()).padStart(2,'0');
+}
+function twClock(ms){
+  var d=new Date(ms+8*3600000);
+  return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');
+}
+function winStart(date){ return new Date(date+'T00:00:00+08:00').getTime(); }
+function winEnd(date){   return new Date(date+'T12:30:00+08:00').getTime(); }
+function pretty(date){ var p=date.split('-'); return Number(p[1])+'/'+Number(p[2]); }
+function stamp(ts){ if(!ts||!ts.toDate) return ''; return twClock(ts.toDate().getTime()); }
+
+/* ===== 距離 ===== */
+function metres(la1,lo1,la2,lo2){
+  var R=6371000,p=Math.PI/180;
+  var dLa=(la2-la1)*p, dLo=(lo2-lo1)*p;
+  var x=Math.sin(dLa/2)*Math.sin(dLa/2)+
+        Math.cos(la1*p)*Math.cos(la2*p)*Math.sin(dLo/2)*Math.sin(dLo/2);
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function locate(){
+  return new Promise(function(res,rej){
+    if(!navigator.geolocation) return rej({code:0,msg:'這支瀏覽器不支援定位'});
+    navigator.geolocation.getCurrentPosition(
+      function(p){ res(p.coords); },
+      function(e){
+        if(e.code===1) return rej({code:1,msg:'你拒絕了定位權限'});
+        if(e.code===2) return rej({code:2,msg:'抓不到位置訊號'});
+        return rej({code:3,msg:'定位逾時'});
+      },
+      { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
+    );
+  });
+}
+
+function hashPw(s){
+  if(window.crypto && crypto.subtle && crypto.subtle.digest){
+    return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){
+      return Array.prototype.map.call(new Uint8Array(b),function(x){
+        return x.toString(16).padStart(2,'0'); }).join('');
+    });
+  }
+  var h=5381; for(var i=0;i<s.length;i++){ h=((h<<5)+h)+s.charCodeAt(i); h=h|0; }
+  return Promise.resolve('fb'+(h>>>0).toString(16));
+}
+
+var BALL='<div class="hero"><svg viewBox="0 0 120 120" aria-hidden="true">'+
+  '<defs><radialGradient id="bs" cx="38%" cy="30%">'+
+    '<stop offset="0%" stop-color="#50505c"/><stop offset="55%" stop-color="#16161c"/>'+
+    '<stop offset="100%" stop-color="#040407"/></radialGradient>'+
+  '<radialGradient id="bg" cx="50%" cy="50%">'+
+    '<stop offset="0%" stop-color="rgba(232,180,76,.34)"/>'+
+    '<stop offset="100%" stop-color="rgba(232,180,76,0)"/></radialGradient></defs>'+
+  '<circle cx="60" cy="60" r="58" fill="url(#bg)"/>'+
+  '<circle cx="60" cy="60" r="42" fill="url(#bs)" stroke="#8a6926" stroke-width="1.5"/>'+
+  '<circle cx="60" cy="57" r="17" fill="#f4eee0"/>'+
+  '<text x="60" y="58" text-anchor="middle" dominant-baseline="central" font-size="23" '+
+    'font-weight="700" fill="#101018" font-family="ui-monospace,monospace">8</text>'+
+  '<ellipse cx="43" cy="41" rx="13" ry="7.5" fill="rgba(255,255,255,.15)" transform="rotate(-30 43 41)"/>'+
+  '</svg></div>';
+
+/* ===== 狀態 ===== */
+var CFG=null, ME=null, SES=[], REC={}, TAB='today', LOCK=false;
+
+boot();
+
+function boot(){
+  Promise.all([ syncTime(), db.collection('config').doc('main').get() ])
+  .then(function(r){
+    var d=r[1];
+    if(!d.exists){ app.innerHTML='<div class="empty">系統尚未開通<br>請幹部先進後台完成初始設定</div>'; return; }
+    CFG=d.data();
+    var uid=LS.get('sign_uid');
+    if(uid){
+      return db.collection('members').doc(uid).get().then(function(m){
+        if(m.exists && m.data().pw){ ME=Object.assign({id:m.id},m.data()); return loadAll(); }
+        LS.del('sign_uid'); login();
+      });
+    }
+    login();
+  }).catch(function(e){
+    app.innerHTML='<div class="empty">連不上資料庫<br>'+esc(e.message||e)+'</div>';
+  });
+}
+
+/* ===== 登入 ===== */
+function login(){
+  app.innerHTML=
+    '<div class="hdr"><div class="brand">'+esc(CFG.clubName||'社課簽到')+'<small>ATTENDANCE</small></div></div>'+
+    '<div id="msg" class="msg"></div><div id="body">'+
+      BALL+
+      '<div class="card">'+
+        '<label>ID（自己取，英數）</label>'+
+        '<input id="lid" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="例：a0912">'+
+        '<label>登入密碼</label><input id="lpw" type="password" placeholder="至少 4 碼">'+
+        '<div style="height:16px"></div><button id="lgo">登入 / 建立帳號</button>'+
+      '</div><div id="reg"></div>'+
+      '<div class="empty">第一次進來輸入沒用過的 ID<br>會請你設定登入密碼並填姓名班級<br>'+
+        '忘記密碼找幹部重設</div>'+
+    '</div>';
+  anim();
+  $('lgo').onclick=doLogin;
+  $('lpw').addEventListener('keydown',function(e){ if(e.key==='Enter') doLogin(); });
+}
+
+function doLogin(){
+  var id=$('lid').value.trim(), pw=$('lpw').value;
+  if(!/^[A-Za-z0-9_.-]{2,24}$/.test(id)) return toast('ID 只能用英文、數字、_ - .（2～24 字）',true);
+  if(pw.length<4) return toast('密碼至少 4 碼',true);
+  var b=$('lgo'); b.disabled=true; b.innerHTML='<span class="spin"></span>處理中…';
+  function rst(){ b.disabled=false; b.textContent='登入 / 建立帳號'; }
+
+  db.collection('members').doc(id).get().then(function(s){
+    if(!s.exists){
+      rst();
+      if(CFG.openReg===false) return toast('這個 ID 不存在，而且幹部已關閉新帳號註冊',true);
+      return showReg(id,pw);
+    }
+    var d=s.data();
+    if(!d.pw){ rst(); return rebind(id,pw,d); }
+    return hashPw(pw).then(function(h){
+      if(h!==d.pw){ rst(); return toast('密碼不對',true); }
+      ME=Object.assign({id:id},d); LS.set('sign_uid',id); loadAll();
+    });
+  }).catch(function(e){ rst(); toast(e.message,true); });
+}
+
+function showReg(id,pw){
+  $('reg').innerHTML='<div class="card" style="border-color:var(--golddim);animation:pop .3s ease both">'+
+    '<div class="sec" style="margin-top:0">建立新帳號 · '+esc(id)+'</div>'+
+    '<div class="note">這個 ID 還沒人用。建立後不能改 ID，也不能重綁密碼。</div>'+
+    '<label>姓名（幹部點名看的）</label><input id="rn" placeholder="填你的真名">'+
+    '<label>班級</label><input id="rc" placeholder="例：二忠">'+
+    '<div style="height:16px"></div>'+
+    '<div class="g2"><button id="rgo" class="sm">確認建立</button>'+
+    '<button id="rno" class="sm dim">取消</button></div></div>';
+  try{ $('reg').scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+  $('rno').onclick=function(){ $('reg').innerHTML=''; };
+  $('rgo').onclick=function(){
+    var n=$('rn').value.trim(), c=$('rc').value.trim();
+    if(!n) return toast('要填姓名',true);
+    var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>建立中…';
+    hashPw(pw).then(function(h){
+      return db.collection('members').doc(id).set({ name:n, cls:c, pw:h, createdAt:Date.now() });
+    }).then(function(){
+      ME={id:id,name:n,cls:c}; LS.set('sign_uid',id); loadAll();
+      setTimeout(function(){ toast('帳號建好了，'+n+' 歡迎'); },350);
+    }).catch(function(e){ b.disabled=false; b.textContent='確認建立'; toast(e.message,true); });
+  };
+}
+
+function rebind(id,pw,d){
+  $('reg').innerHTML='<div class="card" style="border-color:var(--golddim);animation:pop .3s ease both">'+
+    '<div class="sec" style="margin-top:0">重新綁定密碼</div>'+
+    '<div class="note">幹部重設了 '+esc(d.name||id)+' 的密碼，用剛剛輸入的那組重新綁定。</div>'+
+    '<div style="height:16px"></div>'+
+    '<div class="g2"><button id="rb" class="sm">確認綁定</button>'+
+    '<button id="rbn" class="sm dim">取消</button></div></div>';
+  $('rbn').onclick=function(){ $('reg').innerHTML=''; };
+  $('rb').onclick=function(){
+    var b=this; b.disabled=true;
+    hashPw(pw).then(function(h){ return db.collection('members').doc(id).update({pw:h}); })
+      .then(function(){ ME=Object.assign({id:id},d); LS.set('sign_uid',id); loadAll(); })
+      .catch(function(e){ b.disabled=false; toast(e.message,true); });
+  };
+}
+
+/* ===== 載入 ===== */
+function loadAll(){
+  app.innerHTML='<div class="load">LOADING…</div>';
+  Promise.all([
+    syncTime(),
+    db.collection('sessions').get(),
+    db.collection('records').where('uid','==',ME.id).get()
+  ]).then(function(r){
+    SES=[]; r[1].forEach(function(d){ SES.push(Object.assign({id:d.id},d.data())); });
+    SES.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+    REC={}; r[2].forEach(function(d){ var v=d.data(); REC[v.sessionId]=Object.assign({id:d.id},v); });
+    render();
+  }).catch(function(e){
+    app.innerHTML='<div class="empty">讀取失敗<br>'+esc(e.message)+'</div>';
+  });
+}
+
+function render(){
+  app.innerHTML=
+    '<div class="hdr">'+
+      '<div class="brand">'+esc(CFG.clubName||'社課簽到')+'<small>ATTENDANCE</small></div>'+
+      '<div class="who"><b>'+esc(ME.name)+'</b>'+esc(ME.cls||'')+
+        ' · <a href="#" id="out">登出</a></div></div>'+
+    '<div id="msg" class="msg"></div><div id="body"></div>';
+
+  var old=document.querySelector('.nav'); if(old) old.remove();
+  var n=document.createElement('div'); n.className='nav';
+  n.innerHTML='<button class="'+(TAB==='today'?'on':'')+'" data-t="today">今日</button>'+
+              '<button class="'+(TAB==='mine'?'on':'')+'" data-t="mine">我的紀錄</button>';
+  document.body.appendChild(n);
+
+  $('out').onclick=function(e){ e.preventDefault(); LS.del('sign_uid'); ME=null;
+    var b=document.querySelector('.nav'); if(b) b.remove(); login(); };
+  Array.prototype.forEach.call(n.children,function(b){
+    b.onclick=function(){ TAB=b.dataset.t; render(); };
+  });
+
+  TAB==='mine' ? vMine() : vToday();
+}
+
+/* ===== 今日 ===== */
+function vToday(){
+  var td=twDate(now());
+  var s=SES.filter(function(x){ return x.date===td; })[0];
+
+  if(!s){
+    var next=SES.filter(function(x){ return x.date>td; })[0];
+    $('body').innerHTML=BALL+
+      '<div class="card"><div class="empty" style="padding:20px 8px">今天沒有社課</div></div>'+
+      (next?'<div class="card today"><div class="l">下一場</div>'+
+        '<div class="d">'+pretty(next.date)+'</div>'+
+        '<div class="v">'+esc(next.venue||'')+'</div></div>'+
+        '<div class="note">當天 <b>00:00 到 12:30</b> 進來表態要不要去。到現場再用通關碼＋定位簽到。</div>'
+       :'<div class="empty">還沒有排定的場次</div>');
+    anim(); return;
+  }
+
+  var r=REC[s.id]||null;
+  var t=now(), inWin = t>=winStart(s.date) && t<=winEnd(s.date);
+
+  var h='<div class="card today'+(r&&r.signed?' done':'')+'">'+
+      '<div class="l">今天有社課</div>'+
+      '<div class="d">'+pretty(s.date)+'</div>'+
+      '<div class="v">'+esc(s.venue||'')+'</div></div>';
+
+  /* 已簽到 */
+  if(r&&r.signed){
+    h+='<div class="state signed"><div class="big">✓ 簽到完成</div>'+
+       '<div class="s">'+(r.manual?'幹部補簽':(stamp(r.signedAt)||'')+' 現場簽到')+'</div></div>'+
+       '<div class="note">今天沒事了，好好打球 🎱</div>';
+    $('body').innerHTML=h; anim(); return;
+  }
+
+  /* 請假 */
+  if(r&&r.intent==='leave'){
+    h+='<div class="state leave"><div class="big">已請假</div>'+
+       '<div class="s">'+(stamp(r.intentAt)||'')+' 送出</div></div>';
+    if(inWin) h+='<button id="undo" class="dim">我改變主意，我要去</button>';
+    else h+='<div class="note">表態時間已過（00:00–12:30），要改的話直接找幹部。</div>';
+    $('body').innerHTML=h; anim();
+    var u=$('undo'); if(u) u.onclick=function(){ setIntent(s,'attend'); };
+    return;
+  }
+
+  /* 說會去，還沒簽到 → 現場簽到區 */
+  if(r&&r.intent==='attend'){
+    h+='<div class="state attend"><div class="big">你說你會去</div>'+
+       '<div class="s">還沒簽到 · 到現場後輸入通關碼</div></div>';
+
+    if(s.open===false){
+      h+='<div class="note">幹部還沒開放簽到，到了現場再試一次。</div>';
+    } else {
+      h+='<div class="card"><label>當日通關碼（幹部現場公布）</label>'+
+        '<div class="pin">'+
+          '<input class="k" id="k0" type="tel" inputmode="numeric" maxlength="1">'+
+          '<input class="k" id="k1" type="tel" inputmode="numeric" maxlength="1">'+
+          '<input class="k" id="k2" type="tel" inputmode="numeric" maxlength="1">'+
+          '<input class="k" id="k3" type="tel" inputmode="numeric" maxlength="1">'+
+        '</div>'+
+        '<div style="height:16px"></div>'+
+        '<button id="sgo" class="go">簽到（需要定位）</button>'+
+        '<div class="note">按下去會跳出定位請求，<b>一定要按允許</b>。'+
+          '你必須人在活動地點 '+(CFG.radius||500)+' 公尺內才簽得過。</div></div>';
+    }
+    if(inWin) h+='<button id="toLeave" class="dim sm">改成請假</button>';
+    $('body').innerHTML=h; anim();
+    bindPin();
+    var g=$('sgo'); if(g) g.onclick=function(){ doSign(s,r); };
+    var tl=$('toLeave'); if(tl) tl.onclick=function(){ setIntent(s,'leave'); };
+    return;
+  }
+
+  /* 還沒表態 */
+  if(!inWin){
+    h+='<div class="state leave"><div class="big">未回應</div>'+
+       '<div class="s">表態時間 00:00–12:30 已過</div></div>'+
+       '<div class="note">現在超過 12:30 了，系統不讓你補表態。'+
+         '如果你人已經到現場，直接找幹部幫你補簽。</div>';
+    $('body').innerHTML=h; anim(); return;
+  }
+
+  h+='<div class="note">現在是 <b>'+twClock(t)+'</b>（台灣時間）。'+
+     '表態開放到今天 <b>12:30</b>，選完到現場再簽到。</div>'+
+     '<div style="height:6px"></div>'+
+     '<button id="iGo">我會去</button>'+
+     '<div style="height:10px"></div>'+
+     '<button id="iNo" class="dim">我請假</button>';
+  $('body').innerHTML=h; anim();
+  $('iGo').onclick=function(){ setIntent(s,'attend'); };
+  $('iNo').onclick=function(){
+    if(!confirm('確定請假？窗口內還可以改回來。')) return;
+    setIntent(s,'leave');
+  };
+}
+
+function bindPin(){
+  var ks=['k0','k1','k2','k3'].map($);
+  ks.forEach(function(el,i){
+    if(!el) return;
+    el.oninput=function(){
+      el.value=el.value.replace(/\D/g,'').slice(0,1);
+      if(el.value && ks[i+1]) ks[i+1].focus();
+    };
+    el.onkeydown=function(e){
+      if(e.key==='Backspace' && !el.value && ks[i-1]) ks[i-1].focus();
+    };
+  });
+  if(ks[0]) ks[0].focus();
+}
+function pinVal(){
+  return ['k0','k1','k2','k3'].map(function(i){ var e=$(i); return e?e.value:''; }).join('');
+}
+
+/* ===== 表態 ===== */
+function setIntent(s,intent){
+  if(LOCK) return; LOCK=true;
+  var id=s.id+'__'+ME.id;
+  db.collection('records').doc(id).set({
+    sessionId:s.id, uid:ME.id, name:ME.name, cls:ME.cls||'',
+    intent:intent, intentAt:SVT(),
+    signed:false, signedAt:null, manual:false,
+    lat:null, lng:null, dist:null
+  },{merge:true}).then(function(){
+    LOCK=false; loadAll();
+    setTimeout(function(){ toast(intent==='attend'?'已表態：我會去。到現場記得簽到':'已請假'); },350);
+  }).catch(function(e){
+    LOCK=false;
+    toast(err(e),true);
+  });
+}
+
+function err(e){
+  if(e && e.code==='permission-denied')
+    return '被伺服器拒絕 —— 通常是表態時間已過（00:00–12:30），或幹部關閉了這場';
+  return (e&&e.message)||String(e);
+}
+
+/* ===== 簽到 ===== */
+function doSign(s,r){
+  if(LOCK) return;
+  var code=pinVal();
+  if(!/^\d{4}$/.test(code)) return toast('通關碼要四位數字',true);
+  if(String(code)!==String(s.code)) return toast('通關碼不對，跟幹部確認一下',true);
+
+  LOCK=true;
+  var b=$('sgo'); b.disabled=true; b.innerHTML='<span class="spin"></span>定位中…';
+
+  locate().then(function(c){
+    if(s.lat==null||s.lng==null){
+      throw {code:9,msg:'幹部還沒設定這場的地點座標'};
+    }
+    var d=metres(c.latitude,c.longitude,s.lat,s.lng);
+    var R=Number(CFG.radius||500);
+    if(d>R){
+      throw {code:8,msg:'你距離活動地點 '+Math.round(d)+' 公尺，超過 '+R+' 公尺，簽不了'};
+    }
+    b.innerHTML='<span class="spin"></span>送出中…';
+    return db.collection('records').doc(s.id+'__'+ME.id).set({
+      sessionId:s.id, uid:ME.id, name:ME.name, cls:ME.cls||'',
+      intent:'attend', signed:true, signedAt:SVT(), manual:false,
+      lat:c.latitude, lng:c.longitude, dist:Math.round(d), acc:Math.round(c.accuracy||0)
+    },{merge:true});
+  }).then(function(){
+    LOCK=false; loadAll();
+    setTimeout(function(){ toast('簽到成功 ✓'); },350);
+  }).catch(function(e){
+    LOCK=false; b.disabled=false; b.textContent='簽到（需要定位）';
+    if(e && e.code===1){
+      var body=$('body');
+      var tip=document.createElement('div');
+      tip.className='note bad';
+      tip.innerHTML='<b>定位被拒絕，沒辦法簽到。</b><br>'+
+        'iPhone 解法：設定 → Safari → 位置 → 改成「詢問」，'+
+        '然後回來重新整理這頁。<br>Android：網址列左邊的鎖頭 → 權限 → 位置 → 允許。<br>'+
+        '真的弄不好就直接找幹部補簽。';
+      body.appendChild(tip);
+      return toast('你拒絕了定位權限',true);
+    }
+    toast((e&&e.msg)||err(e),true);
+  });
+}
+
+/* ===== 我的紀錄 ===== */
+function vMine(){
+  var td=twDate(now());
+  var done=0;
+  var h='<div class="sec">我的出席紀錄</div>';
+
+  h+=SES.map(function(s){
+    var r=REC[s.id], past=s.date<td, badge, txt;
+    if(r&&r.signed){ badge='b-signed'; txt='已簽到'; done++; }
+    else if(r&&r.intent==='leave'){ badge='b-leave'; txt='請假'; }
+    else if(r&&r.intent==='attend'){ badge=past?'b-miss':'b-attend'; txt=past?'沒簽到':'說會去'; }
+    else { badge=past?'b-miss':'b-none'; txt=past?'未出席':'尚未表態'; }
+
+    return '<div class="card"><div class="row">'+
+      '<div><div class="item">'+pretty(s.date)+'　'+esc(s.title||('第 '+(s.no||'?')+' 次'))+'</div>'+
+        '<div class="meta">'+esc(s.venue||'')+
+          (r&&r.signed&&r.manual?' · 幹部補簽':'')+'</div></div>'+
+      '<span class="badge '+badge+'">'+txt+'</span></div></div>';
+  }).join('') || '<div class="empty">還沒有排定的場次</div>';
+
+  h+='<div class="card"><div class="row"><div class="item">出席次數</div>'+
+     '<div style="font-size:26px;color:var(--gold)">'+done+' / '+SES.length+'</div></div></div>';
+
+  $('body').innerHTML=h; anim();
+}
+
+})();
+</script>
+</body>
+</html>
