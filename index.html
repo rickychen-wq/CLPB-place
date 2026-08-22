@@ -264,13 +264,14 @@ function login(){
     '<div id="msg" class="msg"></div><div id="body">'+
       BALL+
       '<div class="card">'+
-        '<label>ID（自己取，英數）</label>'+
-        '<input id="lid" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="例：a0912">'+
+        '<label>學號</label>'+
+        '<input id="lid" type="tel" inputmode="numeric" autocapitalize="off" autocorrect="off" '+
+          'spellcheck="false" placeholder="例：110234">'+
         '<label>登入密碼</label><input id="lpw" type="password" placeholder="至少 4 碼">'+
         '<div style="height:16px"></div><button id="lgo">登入 / 建立帳號</button>'+
       '</div><div id="reg"></div>'+
-      '<div class="empty">第一次進來輸入沒用過的 ID<br>會請你設定登入密碼並填姓名班級<br>'+
-        '忘記密碼找幹部重設</div>'+
+      '<div class="empty">用你的<b style="color:var(--gold)">學號</b>登入<br>'+
+        '第一次進來會請你設定密碼並填姓名班級<br>忘記密碼找幹部重設</div>'+
     '</div>';
   anim();
   $('lgo').onclick=doLogin;
@@ -279,7 +280,7 @@ function login(){
 
 function doLogin(){
   var id=$('lid').value.trim(), pw=$('lpw').value;
-  if(!/^[A-Za-z0-9_.-]{2,24}$/.test(id)) return toast('ID 只能用英文、數字、_ - .（2～24 字）',true);
+  if(!/^[A-Za-z0-9_.-]{2,24}$/.test(id)) return toast('學號填數字就好（2～24 字）',true);
   if(pw.length<4) return toast('密碼至少 4 碼',true);
   var b=$('lgo'); b.disabled=true; b.innerHTML='<span class="spin"></span>處理中…';
   function rst(){ b.disabled=false; b.textContent='登入 / 建立帳號'; }
@@ -287,7 +288,7 @@ function doLogin(){
   db.collection('members').doc(id).get().then(function(s){
     if(!s.exists){
       rst();
-      if(CFG.openReg===false) return toast('這個 ID 不存在，而且幹部已關閉新帳號註冊',true);
+      if(CFG.openReg===false) return toast('這個學號還沒建過帳號，而且幹部已關閉註冊',true);
       return showReg(id,pw);
     }
     var d=s.data();
@@ -302,9 +303,9 @@ function doLogin(){
 function showReg(id,pw){
   $('reg').innerHTML='<div class="card" style="border-color:var(--golddim);animation:pop .3s ease both">'+
     '<div class="sec" style="margin-top:0">建立新帳號 · '+esc(id)+'</div>'+
-    '<div class="note">這個 ID 還沒人用。建立後不能改 ID，也不能重綁密碼。</div>'+
+    '<div class="note">這個學號還沒人用。建立後不能改，也不能重綁密碼，<b>密碼自己記好</b>。</div>'+
     '<label>姓名（幹部點名看的）</label><input id="rn" placeholder="填你的真名">'+
-    '<label>班級</label><input id="rc" placeholder="例：二忠">'+
+    '<label>班級</label><input id="rc" type="tel" inputmode="numeric" placeholder="例：101">'+
     '<div style="height:16px"></div>'+
     '<div class="g2"><button id="rgo" class="sm">確認建立</button>'+
     '<button id="rno" class="sm dim">取消</button></div></div>';
