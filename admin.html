@@ -707,8 +707,11 @@ function vSet(){
       '<div class="note">大家都註冊完就關掉，免得有人亂建帳號灌出席。</div></div>'+
     '<div class="sec">系統設定</div><div class="card">'+
       '<label>社團名稱</label><input id="cn" value="'+esc(CFG.clubName||'')+'">'+
-      '<label>第一層密碼（進後台用）</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
-      '<label>第二層密碼（動任何東西都要）</label><input id="ce" value="'+esc(editPin())+'">'+
+      (can()
+        ? '<label>第一層密碼（進後台用）</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
+          '<label>第二層密碼（動任何東西都要）</label><input id="ce" value="'+esc(editPin())+'">'
+        : '<label>密碼設定</label>'+
+          '<div class="note">密碼要輸入密碼才看得到。點下面的儲存會先問你。</div>')+
       '<div style="height:16px"></div><button id="cg">儲存</button></div>'+
     '<div class="sec">匯出</div><div class="card">'+
       '<button id="xls" class="ghost">下載 Excel（出席總表 + 明細）</button></div>';
@@ -721,6 +724,7 @@ function vSet(){
       .catch(function(e){ b.disabled=false; toast(e.message,true); });
   };
   if($('cg')) $('cg').onclick=function(){
+    if(!$('cp')||!$('ce')){ render(); return toast('密碼欄位解開了，確認內容後再按一次儲存'); }
     var n=$('cn').value.trim(), p=$('cp').value.trim(), e2=$('ce').value.trim();
     if(!n) return toast('社團名稱不能空白',true);
     if(p.length<4) return toast('第一層密碼至少 4 碼',true);
