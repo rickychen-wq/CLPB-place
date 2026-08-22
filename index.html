@@ -200,8 +200,9 @@ function twClock(ms){
   var d=new Date(ms+8*3600000);
   return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');
 }
-function winStart(date){ return new Date(date+'T00:00:00+08:00').getTime(); }
-function winEnd(date){   return new Date(date+'T12:30:00+08:00').getTime(); }
+function twMs(date,hm){ return new Date(date+'T'+(hm||'00:00')+':00+08:00').getTime(); }
+function w0(s){ return s.winStartTime||'00:00'; }
+function w1(s){ return s.winEndTime||'12:30'; }
 function pretty(date){ var p=date.split('-'); return Number(p[1])+'/'+Number(p[2]); }
 function stamp(ts){ if(!ts||!ts.toDate) return ''; return twClock(ts.toDate().getTime()); }
 
@@ -390,13 +391,14 @@ function vToday(){
       (next?'<div class="card today"><div class="l">下一場</div>'+
         '<div class="d">'+pretty(next.date)+'</div>'+
         '<div class="v">'+esc(next.venue||'')+'</div></div>'+
-        '<div class="note">當天 <b>00:00 到 12:30</b> 進來表態要不要去。到現場再用通關碼簽到。</div>'
+        '<div class="note">當天 <b>'+w0(next)+' 到 '+w1(next)+'</b> 進來表態要不要去。'+
+          '到現場再用通關碼簽到。</div>'
        :'<div class="empty">還沒有排定的場次</div>');
     anim(); return;
   }
 
   var r=REC[s.id]||null;
-  var t=now(), inWin = t>=winStart(s.date) && t<=winEnd(s.date);
+  var t=now(), inWin = t>=twMs(s.date,w0(s)) && t<=twMs(s.date,w1(s));
 
   var h='<div class="card today'+(r&&r.signed?' done':'')+'">'+
       '<div class="l">今天有社課</div>'+
@@ -416,7 +418,7 @@ function vToday(){
     h+='<div class="state leave"><div class="big">已請假</div>'+
        '<div class="s">'+(stamp(r.intentAt)||'')+' 送出</div></div>';
     if(inWin) h+='<button id="undo" class="dim">我改變主意，我要去</button>';
-    else h+='<div class="note">表態時間已過（00:00–12:30），要改的話直接找幹部。</div>';
+    else h+='<div class="note">表態時間已過（'+w0(s)+'–'+w1(s)+'），要改的話直接找幹部。</div>';
     $('body').innerHTML=h; anim();
     var u=$('undo'); if(u) u.onclick=function(){ setIntent(s,'attend'); };
     return;
@@ -453,14 +455,14 @@ function vToday(){
   /* 還沒表態 */
   if(!inWin){
     h+='<div class="state leave"><div class="big">未回應</div>'+
-       '<div class="s">表態時間 00:00–12:30 已過</div></div>'+
-       '<div class="note">現在超過 12:30 了，系統不讓你補表態。'+
+       '<div class="s">表態時間 '+w0(s)+'–'+w1(s)+' 已過</div></div>'+
+       '<div class="note">現在超過 '+w1(s)+' 了，系統不讓你補表態。'+
          '如果你人已經到現場，直接找幹部幫你補簽。</div>';
     $('body').innerHTML=h; anim(); return;
   }
 
   h+='<div class="note">現在是 <b>'+twClock(t)+'</b>（台灣時間）。'+
-     '表態開放到今天 <b>12:30</b>，選完到現場再簽到。</div>'+
+     '表態開放到今天 <b>'+w1(s)+'</b>，選完到現場再簽到。</div>'+
      '<div style="height:6px"></div>'+
      '<button id="iGo">我會去</button>'+
      '<div style="height:10px"></div>'+
@@ -510,7 +512,7 @@ function setIntent(s,intent){
 
 function err(e){
   if(e && e.code==='permission-denied')
-    return '被伺服器拒絕 —— 通常是表態時間已過（00:00–12:30），或幹部關閉了這場';
+    return '被伺服器拒絕 —— 通常是表態時間已過，或幹部關閉了這場簽到';
   return (e&&e.message)||String(e);
 }
 
