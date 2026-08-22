@@ -187,8 +187,9 @@ function twClock(ms){ var d=new Date(ms+8*3600000);
   return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); }
 function pretty(d){ var p=String(d).split('-'); return Number(p[1])+'/'+Number(p[2]); }
 function stamp(ts){ if(!ts||!ts.toDate) return ''; return twClock(ts.toDate().getTime()); }
-function wsTS(date){ return TS.fromMillis(new Date(date+'T00:00:00+08:00').getTime()); }
-function weTS(date){ return TS.fromMillis(new Date(date+'T12:30:00+08:00').getTime()); }
+function twMs(date,hm){ return new Date(date+'T'+(hm||'00:00')+':00+08:00').getTime(); }
+function wsTS(date,hm){ return TS.fromMillis(twMs(date,hm||'00:00')); }
+function weTS(date,hm){ return TS.fromMillis(twMs(date,hm||'12:30')); }
 
 
 var DEF=[
@@ -198,7 +199,7 @@ var DEF=[
 var VENUE={ name:'準將撞球運動館' };
 
 /* ===== 狀態 ===== */
-var CFG=null, SES=[], MEM=[], REC=[], TAB='today', PICK=null, EDIT=null;
+var CFG=null, SES=[], MEM=[], REC=[], TAB='today', PICK=null, EDIT=null, OPENP=null;
 
 boot();
 
@@ -291,7 +292,7 @@ function render(){
   $('out').onclick=function(e){ e.preventDefault(); LS.del('sign_admin');
     var b=document.querySelector('.nav'); if(b) b.remove(); gate(); };
   Array.prototype.forEach.call(n.children,function(b){
-    b.onclick=function(){ TAB=b.dataset.t; EDIT=null; render(); };
+    b.onclick=function(){ TAB=b.dataset.t; EDIT=null; OPENP=null; render(); };
   });
   ({today:vToday, ses:vSes, mem:vMem, set:vSet})[TAB]();
 }
@@ -375,37 +376,62 @@ function grp(title,arr,badge,s){
       var sub=[];
       if(m.cls) sub.push(esc(m.cls));
       if(r&&r.signed) sub.push((r.manual?'幹部補簽':'簽到')+' '+stamp(r.signedAt));
-      else if(r&&r.intentAt) sub.push('表態 '+stamp(r.intentAt));
-      return '<div class="prow">'+
+      else if(r&&r.intentAt) sub.push((r.adminEdit?'幹部設定':'表態')+' '+stamp(r.intentAt));
+      var op=OPENP===m.id;
+      var h='<div class="prow pclick" data-u="'+esc(m.id)+'">'+
         '<div class="nm">'+esc(m.name||m.id)+'<small>'+sub.join(' · ')+'</small></div>'+
-        (r&&r.signed
-          ? '<button class="uns xs dim" data-u="'+esc(m.id)+'">取消簽到</button>'
-          : '<button class="man xs go" data-u="'+esc(m.id)+'">補簽</button>')+
-      '</div>'; }).join('')+'</div>';
+        '<span class="badge b-mute">'+(op?'收起 ▲':'處理 ▼')+'</span></div>';
+      if(op){
+        h+='<div style="padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel2)">'+
+          '<div class="g2">'+
+            (r&&r.signed
+              ? '<button class="pa sm dim" data-a="unsign" data-u="'+esc(m.id)+'">取消簽到</button>'
+              : '<button class="pa sm go" data-a="sign" data-u="'+esc(m.id)+'">補簽</button>')+
+            '<button class="pa sm ghost" data-a="attend" data-u="'+esc(m.id)+'">標記會來</button>'+
+          '</div><div style="height:8px"></div><div class="g2">'+
+            '<button class="pa sm dim" data-a="leave" data-u="'+esc(m.id)+'">標記請假</button>'+
+            '<button class="pa sm danger" data-a="clear" data-u="'+esc(m.id)+'">清除紀錄</button>'+
+          '</div></div>';
+      }
+      return h;
+    }).join('')+'</div>';
 }
 
 function bindPeople(s){
-  Array.prototype.forEach.call(document.querySelectorAll('.man'),function(b){
-    b.onclick=function(){
-      var uid=b.dataset.u, m=MEM.filter(function(x){ return x.id===uid; })[0];
-      if(!confirm('幫 '+(m.name||uid)+' 補簽？會標記成「幹部補簽」。')) return;
-      b.disabled=true;
-      db.collection('records').doc(s.id+'__'+uid).set({
-        sessionId:s.id, uid:uid, name:m.name||uid, cls:m.cls||'',
-        intent:'attend', signed:true, signedAt:SVT(), manual:true
-      },{merge:true}).then(function(){ toast('已補簽'); loadAll(); })
-        .catch(function(e){ b.disabled=false; toast(e.message,true); });
-    };
+  Array.prototype.forEach.call(document.querySelectorAll('.pclick'),function(b){
+    b.onclick=function(){ OPENP = (OPENP===b.dataset.u) ? null : b.dataset.u; render(); };
   });
-  Array.prototype.forEach.call(document.querySelectorAll('.uns'),function(b){
+  Array.prototype.forEach.call(document.querySelectorAll('.pa'),function(b){
     b.onclick=function(){
-      var uid=b.dataset.u;
-      if(!confirm('取消這個人的簽到？')) return;
+      var uid=b.dataset.u, a=b.dataset.a;
+      var m=MEM.filter(function(x){ return x.id===uid; })[0]||{};
+      var ref=db.collection('records').doc(s.id+'__'+uid);
+      var base={ sessionId:s.id, uid:uid, name:m.name||uid, cls:m.cls||'', adminEdit:true };
+      var job, msg;
+
+      if(a==='clear'){
+        if(!confirm('清除 '+(m.name||uid)+' 這場的紀錄？他會變回「未回應」。')) return;
+        job=ref.delete(); msg='已清除';
+      } else if(a==='sign'){
+        if(!confirm('幫 '+(m.name||uid)+' 補簽？會標記成「幹部補簽」。')) return;
+        job=ref.set(Object.assign({},base,{
+          intent:'attend', signed:true, signedAt:SVT(), manual:true }),{merge:true});
+        msg='已補簽';
+      } else if(a==='unsign'){
+        if(!confirm('取消 '+(m.name||uid)+' 的簽到？')) return;
+        job=ref.set(Object.assign({},base,{
+          signed:false, signedAt:null, manual:false }),{merge:true});
+        msg='已取消簽到';
+      } else {
+        job=ref.set(Object.assign({},base,{
+          intent:(a==='leave'?'leave':'attend'), intentAt:SVT(),
+          signed:false, signedAt:null, manual:false }),{merge:true});
+        msg=(a==='leave'?'已標記請假':'已標記會來');
+      }
+
       b.disabled=true;
-      db.collection('records').doc(s.id+'__'+uid).set({
-        signed:false, signedAt:null, manual:false
-      },{merge:true}).then(function(){ toast('已取消'); loadAll(); })
-        .catch(function(e){ b.disabled=false; toast(e.message,true); });
+      job.then(function(){ OPENP=null; toast(msg); loadAll(); })
+         .catch(function(e){ b.disabled=false; toast(e.message,true); });
     };
   });
 }
@@ -436,7 +462,8 @@ function vSes(){
         no:d.no, date:d.date, title:'第 '+d.no+' 次社課',
         venue:VENUE.name,
         code:String(Math.floor(1000+Math.random()*9000)), open:false,
-        winStart:wsTS(d.date), winEnd:weTS(d.date), createdAt:Date.now()
+        winStartTime:'00:00', winEndTime:'12:30',
+        winStart:wsTS(d.date,'00:00'), winEnd:weTS(d.date,'12:30'), createdAt:Date.now()
       });
     });
     batch.commit().then(function(){ toast('六場建好了'); loadAll(); })
@@ -451,7 +478,8 @@ function vSes(){
       no:SES.length+1, date:d, title:t||('第 '+(SES.length+1)+' 次社課'),
       venue:VENUE.name,
       code:String(Math.floor(1000+Math.random()*9000)), open:false,
-      winStart:wsTS(d), winEnd:weTS(d), createdAt:Date.now()
+      winStartTime:'00:00', winEndTime:'12:30',
+      winStart:wsTS(d,'00:00'), winEnd:weTS(d,'12:30'), createdAt:Date.now()
     }).then(function(){ toast('已新增'); loadAll(); })
       .catch(function(e){ b.disabled=false; toast(e.message,true); });
   };
@@ -467,18 +495,24 @@ function sesCard(s){
       '</div>'+
       '<label>名稱</label><input id="et" value="'+esc(s.title||'')+'">'+
       '<label>地點名稱</label><input id="ev" value="'+esc(s.venue||'')+'">'+
+      '<div class="g2">'+
+        '<div><label>表態開始</label><input id="ew0" type="time" value="'+esc(s.winStartTime||'00:00')+'"></div>'+
+        '<div><label>表態截止</label><input id="ew1" type="time" value="'+esc(s.winEndTime||'12:30')+'"></div>'+
+      '</div>'+
       '<label>通關碼</label><input id="ec" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'">'+
       '<div style="height:16px"></div>'+
       '<div class="g2"><button class="ssave sm" data-id="'+s.id+'">儲存</button>'+
         '<button class="scancel sm dim">取消</button></div>'+
       '<div style="height:10px"></div>'+
       '<button class="sdel sm danger" data-id="'+s.id+'">刪除這場</button>'+
-      '<div class="note">改日期會一起更新表態窗口（當天 00:00–12:30 台灣時間）。</div></div>';
+      '<div class="note">表態窗口是台灣時間。要測試就把截止設成 <b>23:59</b>，'+
+        '正式上線再改回 12:30。</div></div>';
   }
   var cnt=REC.filter(function(r){ return r.sessionId===s.id && r.signed; }).length;
   return '<div class="card"><div class="row">'+
     '<div><div class="item">'+pretty(s.date)+'　'+esc(s.title||'')+'</div>'+
-      '<div class="meta">'+esc(s.venue||'未設地點')+' · 通關碼 '+esc(s.code||'--')+'</div></div>'+
+      '<div class="meta">'+esc(s.venue||'未設地點')+' · 通關碼 '+esc(s.code||'--')+
+        ' · 表態 '+esc(s.winStartTime||'00:00')+'–'+esc(s.winEndTime||'12:30')+'</div></div>'+
     '<span class="badge '+(s.open!==false?'b-signed':'b-mute')+'">'+
       (s.open!==false?'開放中':'未開放')+'</span></div>'+
     '<div class="meta">已簽到 '+cnt+' / '+MEM.length+'</div>'+
@@ -494,12 +528,16 @@ function bindSes(){
   Array.prototype.forEach.call(document.querySelectorAll('.ssave'),function(b){
     b.onclick=function(){
       var id=b.dataset.id, d=$('ed').value, c=$('ec').value.trim();
+      var w0=$('ew0').value||'00:00', w1=$('ew1').value||'12:30';
       if(!d) return toast('要有日期',true);
+      if(twMs(d,w1)<=twMs(d,w0)) return toast('截止時間要晚於開始時間',true);
       if(c && !/^\d{4}$/.test(c)) return toast('通關碼要四位數字',true);
       b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
       db.collection('sessions').doc(id).update({
         date:d, no:Number($('en').value)||null, title:$('et').value.trim(),
-        venue:$('ev').value.trim(), code:c, winStart:wsTS(d), winEnd:weTS(d)
+        venue:$('ev').value.trim(), code:c,
+        winStartTime:w0, winEndTime:w1,
+        winStart:wsTS(d,w0), winEnd:weTS(d,w1)
       }).then(function(){ EDIT=null; toast('已更新'); loadAll(); })
         .catch(function(e){ b.disabled=false; b.textContent='儲存'; toast(e.message,true); });
     };
