@@ -44,7 +44,7 @@ input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(-
   border-radius:10px;padding:14px;font:inherit;font-size:17px;outline:none;
   transition:border-color .18s,box-shadow .18s}
 input:focus,select:focus,textarea:focus{border-color:var(--golddim);box-shadow:0 0 0 3px rgba(232,180,76,.13)}
-input[type=date]{font-size:15px;padding:14px 10px}
+input[type=date],input[type=time]{font-size:15px;padding:14px 10px}
 textarea{resize:vertical;min-height:100px;line-height:1.6}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .g2>*,.g3>*{min-width:0}
@@ -446,10 +446,9 @@ function vSes(){
   }
   h+=SES.map(sesCard).join('');
   h+='<div class="sec">新增一場</div><div class="card">'+
-    '<div class="g2">'+
-      '<div><label>日期</label><input id="nd" type="date"></div>'+
-      '<div><label>名稱</label><input id="nt" placeholder="第 7 次"></div>'+
-    '</div><div style="height:14px"></div><button id="nadd" class="ghost">新增場次</button></div>';
+    '<label>日期</label><input id="nd" type="date">'+
+    '<label>名稱</label><input id="nt" placeholder="第 '+(SES.length+1)+' 次社課">'+
+    '<div style="height:18px"></div><button id="nadd" class="ghost">新增場次</button></div>';
 
   $('body').innerHTML=h; anim();
 
@@ -489,10 +488,8 @@ function vSes(){
 function sesCard(s){
   if(EDIT&&EDIT.t==='ses'&&EDIT.id===s.id){
     return '<div class="card edit"><div class="sec" style="margin-top:0">編輯場次</div>'+
-      '<div class="g2">'+
-        '<div><label>日期</label><input id="ed" type="date" value="'+esc(s.date)+'"></div>'+
-        '<div><label>次數</label><input id="en" type="tel" inputmode="numeric" value="'+(s.no||'')+'"></div>'+
-      '</div>'+
+      '<label>日期</label><input id="ed" type="date" value="'+esc(s.date)+'">'+
+      '<label>第幾次</label><input id="en" type="tel" inputmode="numeric" value="'+(s.no||'')+'">'+
       '<label>名稱</label><input id="et" value="'+esc(s.title||'')+'">'+
       '<label>地點名稱</label><input id="ev" value="'+esc(s.venue||'')+'">'+
       '<div class="g2">'+
@@ -560,10 +557,10 @@ function vMem(){
     : '<div class="empty">還沒有社員<br>下面貼名單，或直接發網址讓他們自己註冊</div>';
 
   h+='<div class="sec">批次建立帳號</div><div class="card">'+
-    '<label>一行一個，格式：ID,姓名,班級</label>'+
-    '<textarea id="bulk" placeholder="a0912,王小明,二忠&#10;b0311,李小美,二孝"></textarea>'+
+    '<label>一行一個，格式：學號,姓名,班級</label>'+
+    '<textarea id="bulk" placeholder="110234,王小明,101&#10;110235,李小美,102"></textarea>'+
     '<div style="height:14px"></div><button id="bgo" class="ghost">建立</button>'+
-    '<div class="note">建好的帳號沒有密碼，社員第一次用自己的 ID 登入時會自己設定。'+
+    '<div class="note">建好的帳號沒有密碼，社員第一次用自己的學號登入時會自己設定。'+
       '你也可以完全不建，讓他們自己註冊。</div></div>';
 
   $('body').innerHTML=h; anim();
@@ -580,7 +577,7 @@ function vMem(){
       batch.set(db.collection('members').doc(id),{ name:nm, cls:cl, pw:null, createdAt:Date.now() });
       n++;
     });
-    if(!n) return toast(bad.length?('ID 格式不對：'+bad[0]):'沒有新的人可以建',true);
+    if(!n) return toast(bad.length?('學號格式不對：'+bad[0]):'沒有新的人可以建',true);
     b.disabled=true; b.innerHTML='<span class="spin"></span>建立中…';
     batch.commit().then(function(){ toast('建了 '+n+' 個帳號'+(bad.length?('，'+bad.length+' 行格式錯誤'):'')); loadAll(); })
       .catch(function(e){ b.disabled=false; b.textContent='建立'; toast(e.message,true); });
@@ -603,7 +600,7 @@ function memCard(m){
   var c=REC.filter(function(r){ return r.uid===m.id && r.signed; }).length;
   return '<div class="card"><div class="row">'+
     '<div><div class="item">'+esc(m.name||m.id)+'</div>'+
-      '<div class="meta">'+esc(m.cls||'')+' · ID '+esc(m.id)+(m.pw?'':' · 未設密碼')+'</div></div>'+
+      '<div class="meta">'+esc(m.cls||'')+' · 學號 '+esc(m.id)+(m.pw?'':' · 未設密碼')+'</div></div>'+
     '<div style="font-size:22px;color:var(--gold)">'+c+'/'+SES.length+'</div></div>'+
     '<div style="height:12px"></div>'+
     '<button class="medit sm dim" data-id="'+esc(m.id)+'">編輯</button></div>';
@@ -679,7 +676,7 @@ function vSet(){
   $('xls').onclick=function(){
     try{
       var wb=XLSX.utils.book_new();
-      var head=['姓名','班級','ID'].concat(SES.map(function(s){ return pretty(s.date); })).concat(['出席次數']);
+      var head=['姓名','班級','學號'].concat(SES.map(function(s){ return pretty(s.date); })).concat(['出席次數']);
       var rows=MEM.map(function(m){
         var n=0;
         var cells=SES.map(function(s){
@@ -695,7 +692,7 @@ function vSet(){
 
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(REC.map(function(r){
         var s=SES.filter(function(x){ return x.id===r.sessionId; })[0]||{};
-        return { 日期:s.date||'', 場次:s.title||'', 姓名:r.name, 班級:r.cls||'', ID:r.uid,
+        return { 日期:s.date||'', 場次:s.title||'', 姓名:r.name, 班級:r.cls||'', 學號:r.uid,
           表態:r.intent==='leave'?'請假':(r.intent==='attend'?'會去':''),
           表態時間:stamp(r.intentAt), 簽到:r.signed?'是':'否',
           簽到時間:stamp(r.signedAt), 方式:r.signed?(r.manual?'幹部補簽':'現場簽到'):'' };
