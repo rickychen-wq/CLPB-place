@@ -190,21 +190,12 @@ function stamp(ts){ if(!ts||!ts.toDate) return ''; return twClock(ts.toDate().ge
 function wsTS(date){ return TS.fromMillis(new Date(date+'T00:00:00+08:00').getTime()); }
 function weTS(date){ return TS.fromMillis(new Date(date+'T12:30:00+08:00').getTime()); }
 
-function locate(){
-  return new Promise(function(res,rej){
-    if(!navigator.geolocation) return rej(new Error('這支瀏覽器不支援定位'));
-    navigator.geolocation.getCurrentPosition(
-      function(p){ res(p.coords); },
-      function(e){ rej(new Error(e.code===1?'你拒絕了定位權限':'抓不到位置，室內或高樓層訊號差')); },
-      { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
-  });
-}
 
 var DEF=[
   {no:1,date:'2026-09-22'},{no:2,date:'2026-10-20'},{no:3,date:'2026-11-10'},
   {no:4,date:'2026-12-08'},{no:5,date:'2026-12-15'},{no:6,date:'2027-01-05'}
 ];
-var VENUE={ name:'準將撞球運動館', lat:24.9585431, lng:121.2199812 };
+var VENUE={ name:'準將撞球運動館' };
 
 /* ===== 狀態 ===== */
 var CFG=null, SES=[], MEM=[], REC=[], TAB='today', PICK=null, EDIT=null;
@@ -226,20 +217,18 @@ function setup(){
   app.innerHTML='<div class="hdr"><div class="brand">初始設定<small>FIRST RUN</small></div></div>'+
     '<div id="msg" class="msg"></div><div id="body"><div class="card">'+
       '<label>社團名稱</label><input id="s1" placeholder="例：撞球社">'+
-      '<label>定位半徑（公尺）</label><input id="s2" type="tel" inputmode="numeric" value="500">'+
       '<label>管理密碼</label><input id="s3" type="password" placeholder="至少 4 碼">'+
       '<div style="height:18px"></div><button id="sg">建立系統</button>'+
       '<div class="note">建好之後到「場次」分頁按一鍵建立六場，日期已經幫你填好了。</div>'+
     '</div></div>';
   anim();
   $('sg').onclick=function(){
-    var n=$('s1').value.trim(), r=Number($('s2').value), p=$('s3').value.trim();
+    var n=$('s1').value.trim(), p=$('s3').value.trim();
     if(!n) return toast('填社團名稱',true);
-    if(!r||isNaN(r)||r<50) return toast('半徑至少 50 公尺',true);
     if(p.length<4) return toast('密碼至少 4 碼',true);
     var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>建立中…';
     db.collection('config').doc('main').set({
-      clubName:n, radius:r, adminPin:p, openReg:true, createdAt:Date.now()
+      clubName:n, adminPin:p, openReg:true, createdAt:Date.now()
     }).then(function(){ LS.set('sign_admin',p); boot(); })
       .catch(function(e){ b.disabled=false; b.textContent='建立系統'; toast(e.message,true); });
   };
@@ -335,18 +324,15 @@ function vToday(){
   h+='<div class="card code"><div class="l">當日通關碼</div><div class="n">'+esc(s.code||'----')+'</div></div>';
 
   h+='<div class="card"><div class="sw"><div class="t">'+(open?'簽到開放中':'簽到已關閉')+
-      '<small>'+(open?'社員現在可以用通關碼＋定位簽到':'社員按簽到會被擋下')+'</small></div>'+
+      '<small>'+(open?'社員現在可以用通關碼簽到':'社員按簽到會被擋下')+'</small></div>'+
       '<button id="tg" class="xs '+(open?'danger':'go')+'">'+(open?'關閉':'開啟')+'</button></div>'+
     '<hr><div class="g2">'+
       '<div><label>通關碼</label><input id="cd" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'"></div>'+
       '<div><label>&nbsp;</label><button id="rnd" class="ghost sm">隨機換一組</button></div>'+
     '</div>'+
-    '<label>地點座標</label>'+
-    '<div class="meta">'+(s.lat!=null?esc(s.venue||'')+'　'+s.lat.toFixed(5)+', '+s.lng.toFixed(5):'尚未設定')+'</div>'+
-    '<div style="height:10px"></div><button id="gps" class="ghost sm">📍 抓取我現在的位置當作場地</button>'+
     '<div style="height:10px"></div><button id="sv" class="sm">儲存通關碼</button>'+
-    '<div class="note">到現場後按一次「抓取位置」，誤差方向會跟大家一致，比查座標準。'+
-      '半徑目前 <b>'+(CFG.radius||500)+' 公尺</b>。</div></div>';
+    '<div class="note">簽到只驗通關碼，不抓位置。到現場再公布，'+
+      '<b>散場前不要提早講</b>，這就是唯一的防線。</div></div>';
 
   h+='<div class="stats">'+
       '<div class="stat s"><div class="n">'+signed.length+'</div><div class="l">已簽到</div></div>'+
@@ -378,15 +364,6 @@ function vToday(){
       .then(function(){ toast('通關碼已更新為 '+c); loadAll(); })
       .catch(function(e){ b.disabled=false; b.textContent='儲存通關碼'; toast(e.message,true); });
   };
-  $('gps').onclick=function(){
-    var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>定位中…';
-    locate().then(function(c){
-      return db.collection('sessions').doc(s.id).update({
-        lat:c.latitude, lng:c.longitude, acc:Math.round(c.accuracy||0)
-      });
-    }).then(function(){ toast('場地座標已更新'); loadAll(); })
-      .catch(function(e){ b.disabled=false; b.textContent='📍 抓取我現在的位置當作場地'; toast(e.message,true); });
-  };
   bindPeople(s);
 }
 
@@ -397,8 +374,7 @@ function grp(title,arr,badge,s){
       var m=p[0], r=p[1];
       var sub=[];
       if(m.cls) sub.push(esc(m.cls));
-      if(r&&r.signed) sub.push((r.manual?'補簽':'簽到')+' '+stamp(r.signedAt)+
-        (r.dist!=null?' · '+r.dist+'m':''));
+      if(r&&r.signed) sub.push((r.manual?'幹部補簽':'簽到')+' '+stamp(r.signedAt));
       else if(r&&r.intentAt) sub.push('表態 '+stamp(r.intentAt));
       return '<div class="prow">'+
         '<div class="nm">'+esc(m.name||m.id)+'<small>'+sub.join(' · ')+'</small></div>'+
@@ -416,8 +392,7 @@ function bindPeople(s){
       b.disabled=true;
       db.collection('records').doc(s.id+'__'+uid).set({
         sessionId:s.id, uid:uid, name:m.name||uid, cls:m.cls||'',
-        intent:'attend', signed:true, signedAt:SVT(), manual:true,
-        lat:null, lng:null, dist:null
+        intent:'attend', signed:true, signedAt:SVT(), manual:true
       },{merge:true}).then(function(){ toast('已補簽'); loadAll(); })
         .catch(function(e){ b.disabled=false; toast(e.message,true); });
     };
@@ -428,7 +403,7 @@ function bindPeople(s){
       if(!confirm('取消這個人的簽到？')) return;
       b.disabled=true;
       db.collection('records').doc(s.id+'__'+uid).set({
-        signed:false, signedAt:null, manual:false, dist:null
+        signed:false, signedAt:null, manual:false
       },{merge:true}).then(function(){ toast('已取消'); loadAll(); })
         .catch(function(e){ b.disabled=false; toast(e.message,true); });
     };
@@ -459,7 +434,7 @@ function vSes(){
     DEF.forEach(function(d){
       batch.set(db.collection('sessions').doc(), {
         no:d.no, date:d.date, title:'第 '+d.no+' 次社課',
-        venue:VENUE.name, lat:VENUE.lat, lng:VENUE.lng,
+        venue:VENUE.name,
         code:String(Math.floor(1000+Math.random()*9000)), open:false,
         winStart:wsTS(d.date), winEnd:weTS(d.date), createdAt:Date.now()
       });
@@ -474,7 +449,7 @@ function vSes(){
     var b=this; b.disabled=true;
     db.collection('sessions').add({
       no:SES.length+1, date:d, title:t||('第 '+(SES.length+1)+' 次社課'),
-      venue:VENUE.name, lat:VENUE.lat, lng:VENUE.lng,
+      venue:VENUE.name,
       code:String(Math.floor(1000+Math.random()*9000)), open:false,
       winStart:wsTS(d), winEnd:weTS(d), createdAt:Date.now()
     }).then(function(){ toast('已新增'); loadAll(); })
@@ -492,10 +467,6 @@ function sesCard(s){
       '</div>'+
       '<label>名稱</label><input id="et" value="'+esc(s.title||'')+'">'+
       '<label>地點名稱</label><input id="ev" value="'+esc(s.venue||'')+'">'+
-      '<div class="g2">'+
-        '<div><label>緯度</label><input id="ela" value="'+(s.lat!=null?s.lat:'')+'"></div>'+
-        '<div><label>經度</label><input id="eln" value="'+(s.lng!=null?s.lng:'')+'"></div>'+
-      '</div>'+
       '<label>通關碼</label><input id="ec" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'">'+
       '<div style="height:16px"></div>'+
       '<div class="g2"><button class="ssave sm" data-id="'+s.id+'">儲存</button>'+
@@ -507,8 +478,7 @@ function sesCard(s){
   var cnt=REC.filter(function(r){ return r.sessionId===s.id && r.signed; }).length;
   return '<div class="card"><div class="row">'+
     '<div><div class="item">'+pretty(s.date)+'　'+esc(s.title||'')+'</div>'+
-      '<div class="meta">'+esc(s.venue||'未設地點')+' · 通關碼 '+esc(s.code||'--')+
-        ' · '+(s.lat!=null?'座標已設':'無座標')+'</div></div>'+
+      '<div class="meta">'+esc(s.venue||'未設地點')+' · 通關碼 '+esc(s.code||'--')+'</div></div>'+
     '<span class="badge '+(s.open!==false?'b-signed':'b-mute')+'">'+
       (s.open!==false?'開放中':'未開放')+'</span></div>'+
     '<div class="meta">已簽到 '+cnt+' / '+MEM.length+'</div>'+
@@ -526,12 +496,10 @@ function bindSes(){
       var id=b.dataset.id, d=$('ed').value, c=$('ec').value.trim();
       if(!d) return toast('要有日期',true);
       if(c && !/^\d{4}$/.test(c)) return toast('通關碼要四位數字',true);
-      var la=$('ela').value.trim(), ln=$('eln').value.trim();
       b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
       db.collection('sessions').doc(id).update({
         date:d, no:Number($('en').value)||null, title:$('et').value.trim(),
-        venue:$('ev').value.trim(), lat:la===''?null:Number(la), lng:ln===''?null:Number(ln),
-        code:c, winStart:wsTS(d), winEnd:weTS(d)
+        venue:$('ev').value.trim(), code:c, winStart:wsTS(d), winEnd:weTS(d)
       }).then(function(){ EDIT=null; toast('已更新'); loadAll(); })
         .catch(function(e){ b.disabled=false; b.textContent='儲存'; toast(e.message,true); });
     };
@@ -649,7 +617,6 @@ function vSet(){
       '<div class="note">大家都註冊完就關掉，免得有人亂建帳號灌出席。</div></div>'+
     '<div class="sec">系統設定</div><div class="card">'+
       '<label>社團名稱</label><input id="cn" value="'+esc(CFG.clubName||'')+'">'+
-      '<label>定位半徑（公尺）</label><input id="cr" type="tel" inputmode="numeric" value="'+(CFG.radius||500)+'">'+
       '<label>管理密碼</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
       '<div style="height:16px"></div><button id="cg">儲存</button></div>'+
     '<div class="sec">匯出</div><div class="card">'+
@@ -663,12 +630,11 @@ function vSet(){
       .catch(function(e){ b.disabled=false; toast(e.message,true); });
   };
   $('cg').onclick=function(){
-    var n=$('cn').value.trim(), r=Number($('cr').value), p=$('cp').value.trim();
+    var n=$('cn').value.trim(), p=$('cp').value.trim();
     if(!n) return toast('社團名稱不能空白',true);
-    if(!r||isNaN(r)||r<50) return toast('半徑至少 50 公尺',true);
     if(p.length<4) return toast('密碼至少 4 碼',true);
     var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
-    db.collection('config').doc('main').update({clubName:n, radius:r, adminPin:p})
+    db.collection('config').doc('main').update({clubName:n, adminPin:p})
       .then(function(){ LS.set('sign_admin',p); toast('已儲存'); boot(); })
       .catch(function(e){ b.disabled=false; b.textContent='儲存'; toast(e.message,true); });
   };
@@ -694,8 +660,7 @@ function vSet(){
         return { 日期:s.date||'', 場次:s.title||'', 姓名:r.name, 班級:r.cls||'', ID:r.uid,
           表態:r.intent==='leave'?'請假':(r.intent==='attend'?'會去':''),
           表態時間:stamp(r.intentAt), 簽到:r.signed?'是':'否',
-          簽到時間:stamp(r.signedAt), 方式:r.signed?(r.manual?'幹部補簽':'定位簽到'):'',
-          距離公尺:r.dist!=null?r.dist:'' };
+          簽到時間:stamp(r.signedAt), 方式:r.signed?(r.manual?'幹部補簽':'現場簽到'):'' };
       })), '明細');
 
       XLSX.writeFile(wb, CFG.clubName+'_出席_'+twDate(now())+'.xlsx');
