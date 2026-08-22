@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#07070a">
+<title>社課簽到 · 後台</title>
+<style>
+:root{
+  --bg:#07070a; --panel:#101016; --panel2:#181820; --line:#2a2a35;
+  --gold:#e8b44c; --gold2:#f5d189; --golddim:#8a6926; --txt:#ececf2; --dim:#8b8b98;
+  --ok:#4ce8a0; --bad:#f0706b; --blue:#6cd0f0; --r:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);
+  font-family:ui-monospace,'SF Mono',Menlo,Consolas,'PingFang TC','Noto Sans TC',monospace;
+  font-size:16px;line-height:1.7;min-height:100vh;
+  padding-bottom:calc(86px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px)}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px}
+
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes glow{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+@keyframes drop{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.anim{animation:rise .42s cubic-bezier(.22,.9,.28,1) both}
+
+.hdr{border-bottom:1px solid var(--line);padding:18px 0 14px;margin-bottom:16px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand{font-size:20px;letter-spacing:.13em;color:var(--gold);text-shadow:0 0 18px rgba(232,180,76,.45)}
+.brand small{display:block;font-size:11px;letter-spacing:.32em;color:var(--dim);text-shadow:none;margin-top:4px}
+.who{font-size:13px;color:var(--dim);text-align:right}
+.who a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--line)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.card.edit{border-color:var(--golddim);box-shadow:0 0 0 3px rgba(232,180,76,.08)}
+label{display:block;font-size:11px;letter-spacing:.22em;color:var(--dim);margin:16px 0 7px}
+label:first-child{margin-top:0}
+input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  border-radius:10px;padding:14px;font:inherit;font-size:17px;outline:none;
+  transition:border-color .18s,box-shadow .18s}
+input:focus,select:focus,textarea:focus{border-color:var(--golddim);box-shadow:0 0 0 3px rgba(232,180,76,.13)}
+input[type=date]{font-size:15px;padding:14px 10px}
+textarea{resize:vertical;min-height:100px;line-height:1.6}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g2>*,.g3>*{min-width:0}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+button{width:100%;background:linear-gradient(180deg,var(--gold2),var(--gold));color:#0a0a0d;
+  border:0;border-radius:11px;padding:16px;font:inherit;font-size:17px;font-weight:700;
+  letter-spacing:.06em;cursor:pointer;min-height:52px;
+  transition:transform .12s,box-shadow .2s;box-shadow:0 3px 16px rgba(232,180,76,.16)}
+button:active{transform:scale(.975)}
+button:disabled{opacity:.35;box-shadow:none}
+button.ghost{background:transparent;color:var(--gold);border:1px solid var(--golddim);box-shadow:none}
+button.dim{background:transparent;color:var(--dim);border:1px solid var(--line);box-shadow:none}
+button.danger{background:transparent;color:var(--bad);border:1px solid #75342f;box-shadow:none}
+button.go{background:linear-gradient(180deg,#6ef0b4,var(--ok));color:#062117;box-shadow:none}
+button.sm{padding:12px;font-size:15px;min-height:46px}
+button.xs{width:auto;padding:8px 13px;font-size:13px;min-height:auto;flex:0 0 auto}
+
+.sec{font-size:11px;letter-spacing:.3em;color:var(--dim);margin:26px 0 12px;
+  border-bottom:1px solid var(--line);padding-bottom:9px}
+.sec:first-child{margin-top:0}
+
+.code{position:relative;text-align:center;padding:22px 16px;overflow:hidden;
+  background:var(--panel);border:1px solid var(--golddim)}
+.code::before{content:'';position:absolute;left:50%;top:-60%;width:150%;height:170%;
+  transform:translateX(-50%);pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,rgba(232,180,76,.15),transparent 62%);
+  animation:glow 5s ease-in-out infinite}
+.code .l{position:relative;font-size:11px;letter-spacing:.34em;color:var(--dim);margin-bottom:6px}
+.code .n{position:relative;font-size:52px;letter-spacing:.22em;color:var(--gold);line-height:1.15;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 26px rgba(232,180,76,.4)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 5px;text-align:center}
+.stat .n{font-size:24px;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat .l{font-size:10px;letter-spacing:.06em;color:var(--dim);margin-top:3px}
+.stat.s .n{color:var(--ok)} .stat.m .n{color:var(--bad)}
+.stat.a .n{color:var(--gold)} .stat.n0 .n{color:var(--dim)}
+
+.badge{display:inline-block;font-size:12px;padding:4px 11px;border-radius:20px;border:1px solid;white-space:nowrap}
+.b-signed{color:var(--ok);border-color:#2f7355;background:rgba(76,232,160,.1)}
+.b-attend{color:var(--gold);border-color:var(--golddim);background:rgba(232,180,76,.1)}
+.b-leave{color:var(--dim);border-color:var(--line)}
+.b-miss{color:var(--bad);border-color:#75342f;background:rgba(240,112,107,.1)}
+.b-mute{color:var(--dim);border-color:var(--line)}
+
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.row>div:first-child{flex:1;min-width:0}
+.item{font-size:17px;word-break:break-word}
+.meta{font-size:13px;color:var(--dim);margin-top:5px;line-height:1.55}
+.note{font-size:14px;background:var(--panel2);border-left:3px solid var(--golddim);
+  padding:11px 13px;border-radius:0 8px 8px 0;margin-top:12px;color:#cfcfd8;line-height:1.65}
+.note.bad{border-color:var(--bad)}
+.note b{color:var(--gold)}
+.empty{text-align:center;color:var(--dim);padding:40px 16px;font-size:14px;line-height:2.1}
+
+.msg{font-size:14px;padding:13px 15px;border-radius:10px;margin-bottom:14px;display:none}
+.msg.on{display:block;animation:drop .3s cubic-bezier(.22,.9,.28,1) both}
+.msg.ok{background:rgba(76,232,160,.12);color:var(--ok);border:1px solid #2f7355}
+.msg.err{background:rgba(240,112,107,.12);color:var(--bad);border:1px solid #75342f}
+
+.prow{display:flex;align-items:center;gap:10px;padding:13px 14px;border-bottom:1px solid var(--line)}
+.prow:last-child{border-bottom:0}
+.prow .nm{flex:1;min-width:0;font-size:16px}
+.prow .nm small{display:block;font-size:12px;color:var(--dim);margin-top:2px}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px}
+
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0}
+.sw .t{font-size:16px}
+.sw .t small{display:block;font-size:13px;color:var(--dim);margin-top:2px}
+
+.spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(10,10,13,.25);
+  border-top-color:#0a0a0d;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px}
+.load{text-align:center;color:var(--golddim);padding:70px 0;letter-spacing:.35em;font-size:13px;
+  animation:glow 1.4s ease-in-out infinite}
+hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:9000;display:flex;
+  background:rgba(10,10,14,.93);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+.nav button{flex:1;background:transparent;border:0;box-shadow:none;color:var(--dim);
+  font-size:14px;font-weight:400;padding:12px 2px;min-height:auto;border-radius:10px}
+.nav button.on{color:var(--gold);background:rgba(232,180,76,.1)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="load">LOADING…</div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+var firebaseConfig = {
+  apiKey: "AIzaSyDaX_IqdAg0iRYIfDQv8jlBZu4z8jKFdkI",
+  authDomain: "clpb-place.firebaseapp.com",
+  projectId: "clpb-place",
+  storageBucket: "clpb-place.firebasestorage.app",
+  messagingSenderId: "466178805376",
+  appId: "1:466178805376:web:04516e8e7a26c0547e6065"
+};
+firebase.initializeApp(firebaseConfig);
+var db=firebase.firestore();
+var SVT=firebase.firestore.FieldValue.serverTimestamp;
+var TS=firebase.firestore.Timestamp;
+
+var app=document.getElementById('app');
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+var LS={ get:function(k){try{return localStorage.getItem(k)}catch(e){return null}},
+         set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}},
+         del:function(k){try{localStorage.removeItem(k)}catch(e){}} };
+function reduced(){ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } }
+function toast(t,bad){ var m=$('msg'); if(!m) return;
+  m.className='msg'; void m.offsetWidth;
+  m.className='msg on '+(bad?'err':'ok'); m.textContent=t;
+  clearTimeout(toast._t); toast._t=setTimeout(function(){ m.className='msg'; },5000);
+  try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){} }
+function anim(){ var b=$('body'); if(!b||reduced()) return;
+  Array.prototype.forEach.call(b.children,function(el,i){
+    if(i>13) return; el.classList.add('anim'); el.style.animationDelay=(i*45)+'ms'; }); }
+
+var SKEW=0;
+function syncTime(){
+  var ref=db.collection('ping').doc('t');
+  return ref.set({t:SVT()}).then(function(){ return ref.get({source:'server'}); })
+    .then(function(s){ var t=s.data()&&s.data().t;
+      if(t&&t.toDate) SKEW=t.toDate().getTime()-Date.now(); })
+    .catch(function(){ SKEW=0; });
+}
+function now(){ return Date.now()+SKEW; }
+function twDate(ms){ var d=new Date(ms+8*3600000);
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+
+         String(d.getUTCDate()).padStart(2,'0'); }
+function twClock(ms){ var d=new Date(ms+8*3600000);
+  return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); }
+function pretty(d){ var p=String(d).split('-'); return Number(p[1])+'/'+Number(p[2]); }
+function stamp(ts){ if(!ts||!ts.toDate) return ''; return twClock(ts.toDate().getTime()); }
+function wsTS(date){ return TS.fromMillis(new Date(date+'T00:00:00+08:00').getTime()); }
+function weTS(date){ return TS.fromMillis(new Date(date+'T12:30:00+08:00').getTime()); }
+
+function locate(){
+  return new Promise(function(res,rej){
+    if(!navigator.geolocation) return rej(new Error('這支瀏覽器不支援定位'));
+    navigator.geolocation.getCurrentPosition(
+      function(p){ res(p.coords); },
+      function(e){ rej(new Error(e.code===1?'你拒絕了定位權限':'抓不到位置，室內或高樓層訊號差')); },
+      { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+  });
+}
+
+var DEF=[
+  {no:1,date:'2026-09-22'},{no:2,date:'2026-10-20'},{no:3,date:'2026-11-10'},
+  {no:4,date:'2026-12-08'},{no:5,date:'2026-12-15'},{no:6,date:'2027-01-05'}
+];
+var VENUE={ name:'準將撞球運動館', lat:24.9585431, lng:121.2199812 };
+
+/* ===== 狀態 ===== */
+var CFG=null, SES=[], MEM=[], REC=[], TAB='today', PICK=null, EDIT=null;
+
+boot();
+
+function boot(){
+  Promise.all([syncTime(), db.collection('config').doc('main').get()]).then(function(r){
+    if(!r[1].exists) return setup();
+    CFG=r[1].data();
+    if(LS.get('sign_admin')===String(CFG.adminPin)) loadAll();
+    else gate();
+  }).catch(function(e){
+    app.innerHTML='<div class="empty">連不上資料庫<br>'+esc(e.message)+'</div>';
+  });
+}
+
+function setup(){
+  app.innerHTML='<div class="hdr"><div class="brand">初始設定<small>FIRST RUN</small></div></div>'+
+    '<div id="msg" class="msg"></div><div id="body"><div class="card">'+
+      '<label>社團名稱</label><input id="s1" placeholder="例：撞球社">'+
+      '<label>定位半徑（公尺）</label><input id="s2" type="tel" inputmode="numeric" value="500">'+
+      '<label>管理密碼</label><input id="s3" type="password" placeholder="至少 4 碼">'+
+      '<div style="height:18px"></div><button id="sg">建立系統</button>'+
+      '<div class="note">建好之後到「場次」分頁按一鍵建立六場，日期已經幫你填好了。</div>'+
+    '</div></div>';
+  anim();
+  $('sg').onclick=function(){
+    var n=$('s1').value.trim(), r=Number($('s2').value), p=$('s3').value.trim();
+    if(!n) return toast('填社團名稱',true);
+    if(!r||isNaN(r)||r<50) return toast('半徑至少 50 公尺',true);
+    if(p.length<4) return toast('密碼至少 4 碼',true);
+    var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>建立中…';
+    db.collection('config').doc('main').set({
+      clubName:n, radius:r, adminPin:p, openReg:true, createdAt:Date.now()
+    }).then(function(){ LS.set('sign_admin',p); boot(); })
+      .catch(function(e){ b.disabled=false; b.textContent='建立系統'; toast(e.message,true); });
+  };
+}
+
+function gate(){
+  app.innerHTML='<div class="hdr"><div class="brand">'+esc(CFG.clubName)+'<small>ADMIN</small></div></div>'+
+    '<div id="msg" class="msg"></div><div id="body"><div class="card">'+
+    '<label>管理密碼</label><input id="gp" type="password" placeholder="••••">'+
+    '<div style="height:16px"></div><button id="gg">進入後台</button></div>'+
+    '<div class="empty">社員請走 sign-index.html</div></div>';
+  anim();
+  $('gg').onclick=function(){
+    if($('gp').value.trim()!==String(CFG.adminPin)) return toast('密碼不對',true);
+    LS.set('sign_admin',$('gp').value.trim()); loadAll();
+  };
+  $('gp').addEventListener('keydown',function(e){ if(e.key==='Enter') $('gg').click(); });
+}
+
+function loadAll(){
+  app.innerHTML='<div class="load">LOADING…</div>';
+  Promise.all([
+    syncTime(),
+    db.collection('sessions').get(),
+    db.collection('members').get(),
+    db.collection('records').get(),
+    db.collection('config').doc('main').get()
+  ]).then(function(r){
+    SES=[]; r[1].forEach(function(d){ SES.push(Object.assign({id:d.id},d.data())); });
+    MEM=[]; r[2].forEach(function(d){ MEM.push(Object.assign({id:d.id},d.data())); });
+    REC=[]; r[3].forEach(function(d){ REC.push(Object.assign({id:d.id},d.data())); });
+    if(r[4].exists) CFG=r[4].data();
+    SES.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+    MEM.sort(function(a,b){ return String(a.cls||'').localeCompare(String(b.cls||''))
+      || String(a.name||'').localeCompare(String(b.name||''),'zh-Hant'); });
+    if(!PICK||!SES.some(function(s){ return s.id===PICK; })){
+      var td=twDate(now());
+      var t=SES.filter(function(s){ return s.date===td; })[0]
+          || SES.filter(function(s){ return s.date>=td; })[0]
+          || SES[SES.length-1];
+      PICK=t?t.id:null;
+    }
+    render();
+  }).catch(function(e){
+    app.innerHTML='<div class="empty">讀取失敗<br>'+esc(e.message)+'</div>';
+  });
+}
+
+function render(){
+  var tabs=[['today','今日'],['ses','場次'],['mem','名單'],['set','設定']];
+  app.innerHTML='<div class="hdr">'+
+      '<div class="brand">'+esc(CFG.clubName)+'<small>ADMIN · '+twClock(now())+'</small></div>'+
+      '<div class="who"><a href="#" id="out">登出</a></div></div>'+
+    '<div id="msg" class="msg"></div><div id="body"></div>';
+  var old=document.querySelector('.nav'); if(old) old.remove();
+  var n=document.createElement('div'); n.className='nav';
+  n.innerHTML=tabs.map(function(t){
+    return '<button class="'+(TAB===t[0]?'on':'')+'" data-t="'+t[0]+'">'+t[1]+'</button>'; }).join('');
+  document.body.appendChild(n);
+  $('out').onclick=function(e){ e.preventDefault(); LS.del('sign_admin');
+    var b=document.querySelector('.nav'); if(b) b.remove(); gate(); };
+  Array.prototype.forEach.call(n.children,function(b){
+    b.onclick=function(){ TAB=b.dataset.t; EDIT=null; render(); };
+  });
+  ({today:vToday, ses:vSes, mem:vMem, set:vSet})[TAB]();
+}
+
+function recOf(sid,uid){ return REC.filter(function(r){ return r.sessionId===sid && r.uid===uid; })[0]; }
+
+/* ===== 今日看板 ===== */
+function vToday(){
+  if(!SES.length){
+    $('body').innerHTML='<div class="empty">還沒有任何場次<br>先去「場次」分頁建立</div>'; anim(); return;
+  }
+  var s=SES.filter(function(x){ return x.id===PICK; })[0]||SES[0];
+  var open=s.open!==false;
+
+  var signed=[],miss=[],leave=[],none=[];
+  MEM.forEach(function(m){
+    var r=recOf(s.id,m.id);
+    if(r&&r.signed) signed.push([m,r]);
+    else if(r&&r.intent==='leave') leave.push([m,r]);
+    else if(r&&r.intent==='attend') miss.push([m,r]);
+    else none.push([m,null]);
+  });
+
+  var h='<label style="margin-top:0">選擇場次</label><select id="pk">'+
+    SES.map(function(x){
+      return '<option value="'+x.id+'"'+(x.id===s.id?' selected':'')+'>'+
+        pretty(x.date)+'　'+esc(x.title||('第 '+(x.no||'?')+' 次'))+'</option>'; }).join('')+
+    '</select><div style="height:14px"></div>';
+
+  h+='<div class="card code"><div class="l">當日通關碼</div><div class="n">'+esc(s.code||'----')+'</div></div>';
+
+  h+='<div class="card"><div class="sw"><div class="t">'+(open?'簽到開放中':'簽到已關閉')+
+      '<small>'+(open?'社員現在可以用通關碼＋定位簽到':'社員按簽到會被擋下')+'</small></div>'+
+      '<button id="tg" class="xs '+(open?'danger':'go')+'">'+(open?'關閉':'開啟')+'</button></div>'+
+    '<hr><div class="g2">'+
+      '<div><label>通關碼</label><input id="cd" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'"></div>'+
+      '<div><label>&nbsp;</label><button id="rnd" class="ghost sm">隨機換一組</button></div>'+
+    '</div>'+
+    '<label>地點座標</label>'+
+    '<div class="meta">'+(s.lat!=null?esc(s.venue||'')+'　'+s.lat.toFixed(5)+', '+s.lng.toFixed(5):'尚未設定')+'</div>'+
+    '<div style="height:10px"></div><button id="gps" class="ghost sm">📍 抓取我現在的位置當作場地</button>'+
+    '<div style="height:10px"></div><button id="sv" class="sm">儲存通關碼</button>'+
+    '<div class="note">到現場後按一次「抓取位置」，誤差方向會跟大家一致，比查座標準。'+
+      '半徑目前 <b>'+(CFG.radius||500)+' 公尺</b>。</div></div>';
+
+  h+='<div class="stats">'+
+      '<div class="stat s"><div class="n">'+signed.length+'</div><div class="l">已簽到</div></div>'+
+      '<div class="stat m"><div class="n">'+miss.length+'</div><div class="l">說來沒簽</div></div>'+
+      '<div class="stat a"><div class="n">'+leave.length+'</div><div class="l">請假</div></div>'+
+      '<div class="stat n0"><div class="n">'+none.length+'</div><div class="l">未回應</div></div>'+
+    '</div>';
+
+  h+=grp('說會來但還沒簽到',miss,'b-miss',s)+
+     grp('未回應',none,'b-mute',s)+
+     grp('已簽到',signed,'b-signed',s)+
+     grp('請假',leave,'b-leave',s);
+
+  $('body').innerHTML=h; anim();
+
+  $('pk').onchange=function(){ PICK=this.value; render(); };
+  $('rnd').onclick=function(){ $('cd').value=String(Math.floor(1000+Math.random()*9000)); };
+  $('tg').onclick=function(){
+    var b=this; b.disabled=true;
+    db.collection('sessions').doc(s.id).update({open:!open})
+      .then(function(){ toast(open?'已關閉簽到':'已開放簽到'); loadAll(); })
+      .catch(function(e){ b.disabled=false; toast(e.message,true); });
+  };
+  $('sv').onclick=function(){
+    var c=$('cd').value.trim();
+    if(!/^\d{4}$/.test(c)) return toast('通關碼要四位數字',true);
+    var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
+    db.collection('sessions').doc(s.id).update({code:c})
+      .then(function(){ toast('通關碼已更新為 '+c); loadAll(); })
+      .catch(function(e){ b.disabled=false; b.textContent='儲存通關碼'; toast(e.message,true); });
+  };
+  $('gps').onclick=function(){
+    var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>定位中…';
+    locate().then(function(c){
+      return db.collection('sessions').doc(s.id).update({
+        lat:c.latitude, lng:c.longitude, acc:Math.round(c.accuracy||0)
+      });
+    }).then(function(){ toast('場地座標已更新'); loadAll(); })
+      .catch(function(e){ b.disabled=false; b.textContent='📍 抓取我現在的位置當作場地'; toast(e.message,true); });
+  };
+  bindPeople(s);
+}
+
+function grp(title,arr,badge,s){
+  if(!arr.length) return '';
+  return '<div class="sec">'+title+' · '+arr.length+'</div><div class="list">'+
+    arr.map(function(p){
+      var m=p[0], r=p[1];
+      var sub=[];
+      if(m.cls) sub.push(esc(m.cls));
+      if(r&&r.signed) sub.push((r.manual?'補簽':'簽到')+' '+stamp(r.signedAt)+
+        (r.dist!=null?' · '+r.dist+'m':''));
+      else if(r&&r.intentAt) sub.push('表態 '+stamp(r.intentAt));
+      return '<div class="prow">'+
+        '<div class="nm">'+esc(m.name||m.id)+'<small>'+sub.join(' · ')+'</small></div>'+
+        (r&&r.signed
+          ? '<button class="uns xs dim" data-u="'+esc(m.id)+'">取消簽到</button>'
+          : '<button class="man xs go" data-u="'+esc(m.id)+'">補簽</button>')+
+      '</div>'; }).join('')+'</div>';
+}
+
+function bindPeople(s){
+  Array.prototype.forEach.call(document.querySelectorAll('.man'),function(b){
+    b.onclick=function(){
+      var uid=b.dataset.u, m=MEM.filter(function(x){ return x.id===uid; })[0];
+      if(!confirm('幫 '+(m.name||uid)+' 補簽？會標記成「幹部補簽」。')) return;
+      b.disabled=true;
+      db.collection('records').doc(s.id+'__'+uid).set({
+        sessionId:s.id, uid:uid, name:m.name||uid, cls:m.cls||'',
+        intent:'attend', signed:true, signedAt:SVT(), manual:true,
+        lat:null, lng:null, dist:null
+      },{merge:true}).then(function(){ toast('已補簽'); loadAll(); })
+        .catch(function(e){ b.disabled=false; toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.uns'),function(b){
+    b.onclick=function(){
+      var uid=b.dataset.u;
+      if(!confirm('取消這個人的簽到？')) return;
+      b.disabled=true;
+      db.collection('records').doc(s.id+'__'+uid).set({
+        signed:false, signedAt:null, manual:false, dist:null
+      },{merge:true}).then(function(){ toast('已取消'); loadAll(); })
+        .catch(function(e){ b.disabled=false; toast(e.message,true); });
+    };
+  });
+}
+
+/* ===== 場次 ===== */
+function vSes(){
+  var h='';
+  if(!SES.length){
+    h+='<div class="card"><div class="empty" style="padding:16px">還沒有場次</div>'+
+       '<button id="seed">一鍵建立六場（日期已預填）</button>'+
+       '<div class="note">9/22、10/20、11/10、12/8、12/15、2027 1/5，地點預設準將撞球運動館。</div></div>';
+  }
+  h+=SES.map(sesCard).join('');
+  h+='<div class="sec">新增一場</div><div class="card">'+
+    '<div class="g2">'+
+      '<div><label>日期</label><input id="nd" type="date"></div>'+
+      '<div><label>名稱</label><input id="nt" placeholder="第 7 次"></div>'+
+    '</div><div style="height:14px"></div><button id="nadd" class="ghost">新增場次</button></div>';
+
+  $('body').innerHTML=h; anim();
+
+  var sd=$('seed');
+  if(sd) sd.onclick=function(){
+    var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>建立中…';
+    var batch=db.batch();
+    DEF.forEach(function(d){
+      batch.set(db.collection('sessions').doc(), {
+        no:d.no, date:d.date, title:'第 '+d.no+' 次社課',
+        venue:VENUE.name, lat:VENUE.lat, lng:VENUE.lng,
+        code:String(Math.floor(1000+Math.random()*9000)), open:false,
+        winStart:wsTS(d.date), winEnd:weTS(d.date), createdAt:Date.now()
+      });
+    });
+    batch.commit().then(function(){ toast('六場建好了'); loadAll(); })
+      .catch(function(e){ b.disabled=false; b.textContent='一鍵建立六場'; toast(e.message,true); });
+  };
+
+  $('nadd').onclick=function(){
+    var d=$('nd').value, t=$('nt').value.trim();
+    if(!d) return toast('選日期',true);
+    var b=this; b.disabled=true;
+    db.collection('sessions').add({
+      no:SES.length+1, date:d, title:t||('第 '+(SES.length+1)+' 次社課'),
+      venue:VENUE.name, lat:VENUE.lat, lng:VENUE.lng,
+      code:String(Math.floor(1000+Math.random()*9000)), open:false,
+      winStart:wsTS(d), winEnd:weTS(d), createdAt:Date.now()
+    }).then(function(){ toast('已新增'); loadAll(); })
+      .catch(function(e){ b.disabled=false; toast(e.message,true); });
+  };
+  bindSes();
+}
+
+function sesCard(s){
+  if(EDIT&&EDIT.t==='ses'&&EDIT.id===s.id){
+    return '<div class="card edit"><div class="sec" style="margin-top:0">編輯場次</div>'+
+      '<div class="g2">'+
+        '<div><label>日期</label><input id="ed" type="date" value="'+esc(s.date)+'"></div>'+
+        '<div><label>次數</label><input id="en" type="tel" inputmode="numeric" value="'+(s.no||'')+'"></div>'+
+      '</div>'+
+      '<label>名稱</label><input id="et" value="'+esc(s.title||'')+'">'+
+      '<label>地點名稱</label><input id="ev" value="'+esc(s.venue||'')+'">'+
+      '<div class="g2">'+
+        '<div><label>緯度</label><input id="ela" value="'+(s.lat!=null?s.lat:'')+'"></div>'+
+        '<div><label>經度</label><input id="eln" value="'+(s.lng!=null?s.lng:'')+'"></div>'+
+      '</div>'+
+      '<label>通關碼</label><input id="ec" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'">'+
+      '<div style="height:16px"></div>'+
+      '<div class="g2"><button class="ssave sm" data-id="'+s.id+'">儲存</button>'+
+        '<button class="scancel sm dim">取消</button></div>'+
+      '<div style="height:10px"></div>'+
+      '<button class="sdel sm danger" data-id="'+s.id+'">刪除這場</button>'+
+      '<div class="note">改日期會一起更新表態窗口（當天 00:00–12:30 台灣時間）。</div></div>';
+  }
+  var cnt=REC.filter(function(r){ return r.sessionId===s.id && r.signed; }).length;
+  return '<div class="card"><div class="row">'+
+    '<div><div class="item">'+pretty(s.date)+'　'+esc(s.title||'')+'</div>'+
+      '<div class="meta">'+esc(s.venue||'未設地點')+' · 通關碼 '+esc(s.code||'--')+
+        ' · '+(s.lat!=null?'座標已設':'無座標')+'</div></div>'+
+    '<span class="badge '+(s.open!==false?'b-signed':'b-mute')+'">'+
+      (s.open!==false?'開放中':'未開放')+'</span></div>'+
+    '<div class="meta">已簽到 '+cnt+' / '+MEM.length+'</div>'+
+    '<div style="height:12px"></div>'+
+    '<button class="sedit sm dim" data-id="'+s.id+'">編輯</button></div>';
+}
+
+function bindSes(){
+  Array.prototype.forEach.call(document.querySelectorAll('.sedit'),function(b){
+    b.onclick=function(){ EDIT={t:'ses',id:b.dataset.id}; render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('.scancel'),function(b){
+    b.onclick=function(){ EDIT=null; render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('.ssave'),function(b){
+    b.onclick=function(){
+      var id=b.dataset.id, d=$('ed').value, c=$('ec').value.trim();
+      if(!d) return toast('要有日期',true);
+      if(c && !/^\d{4}$/.test(c)) return toast('通關碼要四位數字',true);
+      var la=$('ela').value.trim(), ln=$('eln').value.trim();
+      b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
+      db.collection('sessions').doc(id).update({
+        date:d, no:Number($('en').value)||null, title:$('et').value.trim(),
+        venue:$('ev').value.trim(), lat:la===''?null:Number(la), lng:ln===''?null:Number(ln),
+        code:c, winStart:wsTS(d), winEnd:weTS(d)
+      }).then(function(){ EDIT=null; toast('已更新'); loadAll(); })
+        .catch(function(e){ b.disabled=false; b.textContent='儲存'; toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.sdel'),function(b){
+    b.onclick=function(){
+      if(!confirm('刪掉這場？該場的簽到紀錄不會跟著刪，但會變成孤兒資料。')) return;
+      b.disabled=true;
+      db.collection('sessions').doc(b.dataset.id).delete()
+        .then(function(){ EDIT=null; toast('已刪除'); loadAll(); })
+        .catch(function(e){ b.disabled=false; toast(e.message,true); });
+    };
+  });
+}
+
+/* ===== 名單 ===== */
+function vMem(){
+  var h='<div class="sec">社員 · '+MEM.length+'</div>';
+  h+= MEM.length ? MEM.map(memCard).join('')
+    : '<div class="empty">還沒有社員<br>下面貼名單，或直接發網址讓他們自己註冊</div>';
+
+  h+='<div class="sec">批次建立帳號</div><div class="card">'+
+    '<label>一行一個，格式：ID,姓名,班級</label>'+
+    '<textarea id="bulk" placeholder="a0912,王小明,二忠&#10;b0311,李小美,二孝"></textarea>'+
+    '<div style="height:14px"></div><button id="bgo" class="ghost">建立</button>'+
+    '<div class="note">建好的帳號沒有密碼，社員第一次用自己的 ID 登入時會自己設定。'+
+      '你也可以完全不建，讓他們自己註冊。</div></div>';
+
+  $('body').innerHTML=h; anim();
+
+  $('bgo').onclick=function(){
+    var lines=$('bulk').value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+    if(!lines.length) return toast('貼名單先',true);
+    var b=this, batch=db.batch(), n=0, bad=[];
+    lines.forEach(function(L){
+      var p=L.split(/[,，\t]+/).map(function(x){ return x.trim(); });
+      var id=p[0], nm=p[1]||p[0], cl=p[2]||'';
+      if(!/^[A-Za-z0-9_.-]{2,24}$/.test(id)){ bad.push(L); return; }
+      if(MEM.some(function(m){ return m.id===id; })) return;
+      batch.set(db.collection('members').doc(id),{ name:nm, cls:cl, pw:null, createdAt:Date.now() });
+      n++;
+    });
+    if(!n) return toast(bad.length?('ID 格式不對：'+bad[0]):'沒有新的人可以建',true);
+    b.disabled=true; b.innerHTML='<span class="spin"></span>建立中…';
+    batch.commit().then(function(){ toast('建了 '+n+' 個帳號'+(bad.length?('，'+bad.length+' 行格式錯誤'):'')); loadAll(); })
+      .catch(function(e){ b.disabled=false; b.textContent='建立'; toast(e.message,true); });
+  };
+  bindMem();
+}
+
+function memCard(m){
+  if(EDIT&&EDIT.t==='mem'&&EDIT.id===m.id){
+    return '<div class="card edit"><div class="sec" style="margin-top:0">編輯 · '+esc(m.id)+'</div>'+
+      '<label>姓名</label><input id="mn" value="'+esc(m.name||'')+'">'+
+      '<label>班級</label><input id="mc" value="'+esc(m.cls||'')+'">'+
+      '<div style="height:16px"></div>'+
+      '<div class="g2"><button class="msave sm" data-id="'+esc(m.id)+'">儲存</button>'+
+        '<button class="mcancel sm dim">取消</button></div>'+
+      '<div style="height:10px"></div>'+
+      '<div class="g2"><button class="mrst sm ghost" data-id="'+esc(m.id)+'">重設密碼</button>'+
+        '<button class="mdel sm danger" data-id="'+esc(m.id)+'">刪除</button></div></div>';
+  }
+  var c=REC.filter(function(r){ return r.uid===m.id && r.signed; }).length;
+  return '<div class="card"><div class="row">'+
+    '<div><div class="item">'+esc(m.name||m.id)+'</div>'+
+      '<div class="meta">'+esc(m.cls||'')+' · ID '+esc(m.id)+(m.pw?'':' · 未設密碼')+'</div></div>'+
+    '<div style="font-size:22px;color:var(--gold)">'+c+'/'+SES.length+'</div></div>'+
+    '<div style="height:12px"></div>'+
+    '<button class="medit sm dim" data-id="'+esc(m.id)+'">編輯</button></div>';
+}
+
+function bindMem(){
+  Array.prototype.forEach.call(document.querySelectorAll('.medit'),function(b){
+    b.onclick=function(){ EDIT={t:'mem',id:b.dataset.id}; render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('.mcancel'),function(b){
+    b.onclick=function(){ EDIT=null; render(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('.msave'),function(b){
+    b.onclick=function(){
+      var id=b.dataset.id, n=$('mn').value.trim();
+      if(!n) return toast('姓名不能空白',true);
+      b.disabled=true;
+      db.collection('members').doc(id).update({ name:n, cls:$('mc').value.trim() })
+        .then(function(){ EDIT=null; toast('已更新'); loadAll(); })
+        .catch(function(e){ b.disabled=false; toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.mrst'),function(b){
+    b.onclick=function(){
+      if(!confirm('清掉密碼？他下次登入時自己重設。')) return;
+      b.disabled=true;
+      db.collection('members').doc(b.dataset.id).update({pw:null})
+        .then(function(){ EDIT=null; toast('已清除'); loadAll(); })
+        .catch(function(e){ b.disabled=false; toast(e.message,true); });
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.mdel'),function(b){
+    b.onclick=function(){
+      if(!confirm('刪掉這個社員？他的簽到紀錄會留著。')) return;
+      b.disabled=true;
+      db.collection('members').doc(b.dataset.id).delete()
+        .then(function(){ EDIT=null; toast('已刪除'); loadAll(); })
+        .catch(function(e){ b.disabled=false; toast(e.message,true); });
+    };
+  });
+}
+
+/* ===== 設定 ===== */
+function vSet(){
+  var open=CFG.openReg!==false;
+  $('body').innerHTML=
+    '<div class="sec">新帳號註冊</div><div class="card">'+
+      '<div class="sw"><div class="t">'+(open?'開放中':'已關閉')+
+        '<small>'+(open?'輸入沒用過的 ID 就能自己建帳號':'只有現有帳號能登入')+'</small></div>'+
+        '<button id="rsw" class="xs '+(open?'danger':'ghost')+'">'+(open?'關閉':'開啟')+'</button></div>'+
+      '<div class="note">大家都註冊完就關掉，免得有人亂建帳號灌出席。</div></div>'+
+    '<div class="sec">系統設定</div><div class="card">'+
+      '<label>社團名稱</label><input id="cn" value="'+esc(CFG.clubName||'')+'">'+
+      '<label>定位半徑（公尺）</label><input id="cr" type="tel" inputmode="numeric" value="'+(CFG.radius||500)+'">'+
+      '<label>管理密碼</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
+      '<div style="height:16px"></div><button id="cg">儲存</button></div>'+
+    '<div class="sec">匯出</div><div class="card">'+
+      '<button id="xls" class="ghost">下載 Excel（出席總表 + 明細）</button></div>';
+  anim();
+
+  $('rsw').onclick=function(){
+    var b=this; b.disabled=true;
+    db.collection('config').doc('main').update({openReg:!open})
+      .then(function(){ CFG.openReg=!open; toast(open?'已關閉註冊':'已開放註冊'); render(); })
+      .catch(function(e){ b.disabled=false; toast(e.message,true); });
+  };
+  $('cg').onclick=function(){
+    var n=$('cn').value.trim(), r=Number($('cr').value), p=$('cp').value.trim();
+    if(!n) return toast('社團名稱不能空白',true);
+    if(!r||isNaN(r)||r<50) return toast('半徑至少 50 公尺',true);
+    if(p.length<4) return toast('密碼至少 4 碼',true);
+    var b=this; b.disabled=true; b.innerHTML='<span class="spin"></span>儲存中…';
+    db.collection('config').doc('main').update({clubName:n, radius:r, adminPin:p})
+      .then(function(){ LS.set('sign_admin',p); toast('已儲存'); boot(); })
+      .catch(function(e){ b.disabled=false; b.textContent='儲存'; toast(e.message,true); });
+  };
+  $('xls').onclick=function(){
+    try{
+      var wb=XLSX.utils.book_new();
+      var head=['姓名','班級','ID'].concat(SES.map(function(s){ return pretty(s.date); })).concat(['出席次數']);
+      var rows=MEM.map(function(m){
+        var n=0;
+        var cells=SES.map(function(s){
+          var r=recOf(s.id,m.id);
+          if(r&&r.signed){ n++; return r.manual?'補簽':'○'; }
+          if(r&&r.intent==='leave') return '假';
+          if(r&&r.intent==='attend') return '未簽';
+          return '×';
+        });
+        return [m.name||m.id, m.cls||'', m.id].concat(cells).concat([n]);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(rows)), '出席總表');
+
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(REC.map(function(r){
+        var s=SES.filter(function(x){ return x.id===r.sessionId; })[0]||{};
+        return { 日期:s.date||'', 場次:s.title||'', 姓名:r.name, 班級:r.cls||'', ID:r.uid,
+          表態:r.intent==='leave'?'請假':(r.intent==='attend'?'會去':''),
+          表態時間:stamp(r.intentAt), 簽到:r.signed?'是':'否',
+          簽到時間:stamp(r.signedAt), 方式:r.signed?(r.manual?'幹部補簽':'定位簽到'):'',
+          距離公尺:r.dist!=null?r.dist:'' };
+      })), '明細');
+
+      XLSX.writeFile(wb, CFG.clubName+'_出席_'+twDate(now())+'.xlsx');
+      toast('已下載');
+    }catch(e){ toast('匯出失敗：'+e.message,true); }
+  };
+}
+
+})();
+</script>
+</body>
+</html>
