@@ -293,8 +293,8 @@ function render(){
   var tabs=[['today','今日'],['ses','場次'],['mem','名單'],['set','設定']];
   app.innerHTML='<div class="hdr">'+
       '<div class="brand">'+esc(CFG.clubName)+'<small>ADMIN · '+twClock(now())+'</small></div>'+
-      '<div class="who"><a href="#" id="lk">'+(can()?'🔓 編輯模式':'🔒 唯讀模式')+'</a>'+
-        '<br><a href="#" id="out">登出</a></div></div>'+
+      '<div class="who">'+(can()?'<a href="#" id="lk">🔓 鎖定</a><br>':'')+
+        '<a href="#" id="out">登出</a></div></div>'+
     '<div id="msg" class="msg"></div><div id="lockbox"></div><div id="body"></div>';
   var old=document.querySelector('.nav'); if(old) old.remove();
   var n=document.createElement('div'); n.className='nav';
@@ -304,11 +304,10 @@ function render(){
   $('out').onclick=function(e){ e.preventDefault(); LS.del('sign_admin');
     var b=document.querySelector('.nav'); if(b) b.remove(); gate(); };
 
-  $('lk').onclick=function(e){
+  if($('lk')) $('lk').onclick=function(e){
     e.preventDefault();
-    if(can()){ LS.del('sign_lv2'); LV=1; UNLOCK=false; EDIT=null; OPENP=null;
-      render(); toast('已鎖回唯讀模式'); return; }
-    UNLOCK=!UNLOCK; drawLock();
+    LS.del('sign_lv2'); LV=1; PEND=null; UNLOCK=false; EDIT=null; OPENP=null;
+    render(); toast('已鎖定，之後動任何東西都要再輸密碼');
   };
   drawLock();
   Array.prototype.forEach.call(n.children,function(b){
@@ -317,20 +316,38 @@ function render(){
   ({today:vToday, ses:vSes, mem:vMem, set:vSet})[TAB]();
 }
 
+/* 會改到資料的控制項；沒解鎖前按下去會先跳密碼 */
+var GUARD='#tg,#sv,#rnd,#seed,#nadd,#bgo,#cg,#rsw,'+
+  '.pa,.sedit,.medit,.ssave,.sdel,.msave,.mdel,.mrst';
+var PEND=null;
+
+document.addEventListener('click',function(e){
+  if(can()) return;
+  var t=e.target;
+  var el=(t&&t.closest)?t.closest(GUARD):null;
+  if(!el) return;
+  e.preventDefault(); e.stopPropagation();
+  PEND=el; UNLOCK=true; drawLock();
+},true);
+
 function drawLock(){
   var box=$('lockbox'); if(!box) return;
   if(!UNLOCK||can()){ box.innerHTML=''; return; }
+  var what=PEND?(PEND.textContent||'').trim().slice(0,12):'';
   box.innerHTML='<div class="card edit" style="animation:pop .28s ease both">'+
-    '<div class="sec" style="margin-top:0">解鎖編輯權限</div>'+
-    '<div class="note">唯讀模式下只能看，不能改。輸入第二層密碼才能編輯、新增、刪除。</div>'+
-    '<label>第二層密碼</label><input id="lkp" type="password" placeholder="••••••">'+
+    '<div class="sec" style="margin-top:0">需要密碼</div>'+
+    (what?'<div class="note">你要執行「<b>'+esc(what)+'</b>」，輸入密碼後會直接幫你完成。</div>':'')+
+    '<label>密碼</label><input id="lkp" type="password" placeholder="••••••">'+
     '<div style="height:14px"></div>'+
-    '<div class="g2"><button id="lkg" class="sm">解鎖</button>'+
+    '<div class="g2"><button id="lkg" class="sm">確認</button>'+
       '<button id="lkc" class="sm dim">取消</button></div></div>';
-  $('lkc').onclick=function(){ UNLOCK=false; drawLock(); };
+  $('lkc').onclick=function(){ UNLOCK=false; PEND=null; drawLock(); };
   $('lkg').onclick=function(){
-    if($('lkp').value.trim()!==editPin()) return toast('第二層密碼不對',true);
-    LS.set('sign_lv2',editPin()); LV=2; UNLOCK=false; render(); toast('已解鎖，可以編輯了');
+    if($('lkp').value.trim()!==editPin()) return toast('密碼不對',true);
+    LS.set('sign_lv2',editPin()); LV=2; UNLOCK=false;
+    var el=PEND; PEND=null; drawLock();
+    if(el && document.contains(el)) el.click();
+    else render();
   };
   $('lkp').addEventListener('keydown',function(e){ if(e.key==='Enter') $('lkg').click(); });
   try{ $('lkp').focus(); }catch(e){}
@@ -365,17 +382,13 @@ function vToday(){
 
   h+='<div class="card"><div class="sw"><div class="t">'+(open?'簽到開放中':'簽到已關閉')+
       '<small>'+(open?'社員現在可以用通關碼簽到':'社員按簽到會被擋下')+'</small></div>'+
-      (can()?'<button id="tg" class="xs '+(open?'danger':'go')+'">'+(open?'關閉':'開啟')+'</button>':'')+
+      '<button id="tg" class="xs '+(open?'danger':'go')+'">'+(open?'關閉':'開啟')+'</button></div>'+
+    '<hr><div class="g2">'+
+      '<div><label>通關碼</label><input id="cd" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'"></div>'+
+      '<div><label>&nbsp;</label><button id="rnd" class="ghost sm">隨機換一組</button></div>'+
     '</div>'+
-    (can()
-      ? '<hr><div class="g2">'+
-          '<div><label>通關碼</label><input id="cd" type="tel" inputmode="numeric" maxlength="4" value="'+esc(s.code||'')+'"></div>'+
-          '<div><label>&nbsp;</label><button id="rnd" class="ghost sm">隨機換一組</button></div>'+
-        '</div>'+
-        '<div style="height:10px"></div><button id="sv" class="sm">儲存通關碼</button>'+
-        '<div class="note">到現場再公布，<b>散場前不要提早講</b>，這就是唯一的防線。</div>'
-      : '<div class="note">唯讀模式，不能改通關碼或開關簽到。</div>')+
-    '</div>';
+    '<div style="height:10px"></div><button id="sv" class="sm">儲存通關碼</button>'+
+    '<div class="note">到現場再公布，<b>散場前不要提早講</b>，這就是唯一的防線。</div></div>';
 
   h+='<div class="stats">'+
       '<div class="stat s"><div class="n">'+signed.length+'</div><div class="l">已簽到</div></div>'+
@@ -419,10 +432,10 @@ function grp(title,arr,badge,s){
       if(m.cls) sub.push(esc(m.cls));
       if(r&&r.signed) sub.push((r.manual?'幹部補簽':'簽到')+' '+stamp(r.signedAt));
       else if(r&&r.intentAt) sub.push((r.adminEdit?'幹部設定':'表態')+' '+stamp(r.intentAt));
-      var op=can()&&OPENP===m.id;
-      var h='<div class="prow'+(can()?' pclick':'')+'" data-u="'+esc(m.id)+'">'+
+      var op=OPENP===m.id;
+      var h='<div class="prow pclick" data-u="'+esc(m.id)+'">'+
         '<div class="nm">'+esc(m.name||m.id)+'<small>'+sub.join(' · ')+'</small></div>'+
-        (can()?'<span class="badge b-mute">'+(op?'收起 ▲':'處理 ▼')+'</span>':'')+'</div>';
+        '<span class="badge b-mute">'+(op?'收起 ▲':'處理 ▼')+'</span></div>';
       if(op){
         h+='<div style="padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel2)">'+
           '<div class="g2">'+
@@ -483,12 +496,11 @@ function vSes(){
   var h='';
   if(!SES.length){
     h+='<div class="card"><div class="empty" style="padding:16px">還沒有場次</div>'+
-       (can()?'<button id="seed">一鍵建立六場（日期已預填）</button>':
-         '<div class="note">要建立場次請先解鎖編輯權限。</div>')+
+       '<button id="seed">一鍵建立六場（日期已預填）</button>'+
        '<div class="note">9/22、10/20、11/10、12/8、12/15、2027 1/5，地點預設準將撞球運動館。</div></div>';
   }
   h+=SES.map(sesCard).join('');
-  if(can()) h+='<div class="sec">新增一場</div><div class="card">'+
+  h+='<div class="sec">新增一場</div><div class="card">'+
     '<label>日期</label><input id="nd" type="date">'+
     '<label>名稱</label><input id="nt" placeholder="第 '+(SES.length+1)+' 次社課">'+
     '<div style="height:18px"></div><button id="nadd" class="ghost">新增場次</button></div>';
@@ -556,8 +568,8 @@ function sesCard(s){
     '<span class="badge '+(s.open!==false?'b-signed':'b-mute')+'">'+
       (s.open!==false?'開放中':'未開放')+'</span></div>'+
     '<div class="meta">已簽到 '+cnt+' / '+MEM.length+'</div>'+
-    (can()?'<div style="height:12px"></div>'+
-      '<button class="sedit sm dim" data-id="'+s.id+'">編輯</button>':'')+'</div>';
+    '<div style="height:12px"></div>'+
+    '<button class="sedit sm dim" data-id="'+s.id+'">編輯</button></div>';
 }
 
 function bindSes(){
@@ -599,7 +611,7 @@ function vMem(){
   h+= MEM.length ? MEM.map(memCard).join('')
     : '<div class="empty">還沒有社員<br>下面貼名單，或直接發網址讓他們自己註冊</div>';
 
-  if(can()) h+='<div class="sec">批次建立帳號</div><div class="card">'+
+  h+='<div class="sec">批次建立帳號</div><div class="card">'+
     '<label>一行一個，格式：學號,姓名,班級</label>'+
     '<textarea id="bulk" placeholder="110234,王小明,101&#10;110235,李小美,102"></textarea>'+
     '<div style="height:14px"></div><button id="bgo" class="ghost">建立</button>'+
@@ -645,8 +657,8 @@ function memCard(m){
     '<div><div class="item">'+esc(m.name||m.id)+'</div>'+
       '<div class="meta">'+esc(m.cls||'')+' · 學號 '+esc(m.id)+(m.pw?'':' · 未設密碼')+'</div></div>'+
     '<div style="font-size:22px;color:var(--gold)">'+c+'/'+SES.length+'</div></div>'+
-    (can()?'<div style="height:12px"></div>'+
-      '<button class="medit sm dim" data-id="'+esc(m.id)+'">編輯</button>':'')+'</div>';
+    '<div style="height:12px"></div>'+
+    '<button class="medit sm dim" data-id="'+esc(m.id)+'">編輯</button></div>';
 }
 
 function bindMem(){
@@ -688,23 +700,16 @@ function bindMem(){
 function vSet(){
   var open=CFG.openReg!==false;
   $('body').innerHTML=
-    (can()
-      ? '<div class="sec">新帳號註冊</div><div class="card">'+
-          '<div class="sw"><div class="t">'+(open?'開放中':'已關閉')+
-            '<small>'+(open?'輸入沒用過的學號就能自己建帳號':'只有現有帳號能登入')+'</small></div>'+
-            '<button id="rsw" class="xs '+(open?'danger':'ghost')+'">'+(open?'關閉':'開啟')+'</button></div>'+
-          '<div class="note">大家都註冊完就關掉，免得有人亂建帳號灌出席。</div></div>'+
-        '<div class="sec">系統設定</div><div class="card">'+
-          '<label>社團名稱</label><input id="cn" value="'+esc(CFG.clubName||'')+'">'+
-          '<label>第一層密碼（給幹部，只能看）</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
-          '<label>第二層密碼（編輯用，只有你知道）</label><input id="ce" value="'+esc(editPin())+'">'+
-          '<div style="height:16px"></div><button id="cg">儲存</button>'+
-          '<div class="note">改了第二層密碼會自動幫你重新解鎖，不用再輸入一次。</div></div>'
-      : '<div class="sec">目前權限</div><div class="card">'+
-          '<div class="row"><div class="item">唯讀模式</div>'+
-            '<span class="badge b-mute">第一層</span></div>'+
-          '<div class="note">可以看所有場次、名單、出席狀況，也能匯出 Excel，'+
-            '但不能新增、編輯、刪除或補簽。要編輯請點右上角的 🔒 解鎖。</div></div>')+
+    '<div class="sec">新帳號註冊</div><div class="card">'+
+      '<div class="sw"><div class="t">'+(open?'開放中':'已關閉')+
+        '<small>'+(open?'輸入沒用過的學號就能自己建帳號':'只有現有帳號能登入')+'</small></div>'+
+        '<button id="rsw" class="xs '+(open?'danger':'ghost')+'">'+(open?'關閉':'開啟')+'</button></div>'+
+      '<div class="note">大家都註冊完就關掉，免得有人亂建帳號灌出席。</div></div>'+
+    '<div class="sec">系統設定</div><div class="card">'+
+      '<label>社團名稱</label><input id="cn" value="'+esc(CFG.clubName||'')+'">'+
+      '<label>第一層密碼（進後台用）</label><input id="cp" value="'+esc(CFG.adminPin)+'">'+
+      '<label>第二層密碼（動任何東西都要）</label><input id="ce" value="'+esc(editPin())+'">'+
+      '<div style="height:16px"></div><button id="cg">儲存</button></div>'+
     '<div class="sec">匯出</div><div class="card">'+
       '<button id="xls" class="ghost">下載 Excel（出席總表 + 明細）</button></div>';
   anim();
